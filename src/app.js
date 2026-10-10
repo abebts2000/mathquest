@@ -14,6 +14,8 @@
   const KEY = 'mathquest.v1';
   const COLORS = ['#e8590c', '#0f8b8d', '#7048e8', '#2563d9', '#c2255c', '#2f9e44', '#d98a00', '#495057'];
   const TRACK_LABEL = { g3: 'Grade 3', g7: 'Grade 7', geo: 'Geometry' };
+  const HINT_DEFAULT = 3; // hints per lesson; parents can change it (-1 = unlimited)
+  const hintLimit = () => (db.hintLimit == null ? HINT_DEFAULT : db.hintLimit);
   const FREEZE_COST = 50, MAX_FREEZES = 2, QUEST_GEMS = 15, PERFECT_GEMS = 5;
 
   // ---------- Storage ----------
@@ -369,7 +371,7 @@
     const startScore = sp.score, startCrowns = G.crownsFor(sp.score);
     const wasActiveToday = active(p.id, today());
     const streakBefore = streakDays(p.id);
-    const L = { correct: 0, wrong: 0, asked: 0, combo: 0, bestCombo: 0, xp: 0, started: Date.now() };
+    const L = { correct: 0, wrong: 0, asked: 0, combo: 0, bestCombo: 0, xp: 0, started: Date.now(), hintsLeft: hintLimit(), hintsUsed: 0 };
     const recent = [];
     let problem = null, widget = null, shownAt = 0, phase = 'answer', missStreak = 0;
 
@@ -425,10 +427,27 @@
       G.restartAnim(card, 'slide-in');
       foot.className = 'lesson-foot';
       foot.replaceChildren(h('div', { class: 'foot-in' },
-        pr.hint ? h('button', { class: 'btn3d ghost', onclick: (e) => { G.sfx.tap(); hintBox.replaceChildren(tex(h('p', { class: 'hint', html: pr.hint }))); e.currentTarget.remove(); } }, 'Hint') : null,
+        hintFor(pr) ? hintButton(hintFor(pr), hintBox) : null,
         check));
       check.addEventListener('click', grade);
       setTimeout(() => widget.focus && widget.focus(), 60);
+    }
+    // Hint button with the number left this lesson; shows a "hints left" note after each use.
+    // Use the problem's hint, or else the first step of its worked solution (when there are later steps).
+    const hintFor = (pr) => pr.hint || (Array.isArray(pr.explanation) && pr.explanation.length >= 2 ? pr.explanation[0] : null);
+    function hintButton(hintHtml, hintBox) {
+      const unlimited = L.hintsLeft < 0;
+      if (!unlimited && L.hintsLeft === 0) return h('button', { class: 'btn3d ghost hint-btn', disabled: true, title: 'No hints left in this lesson' }, 'No hints left');
+      return h('button', { class: 'btn3d ghost hint-btn', 'aria-label': unlimited ? 'Hint' : `Hint, ${L.hintsLeft} left`, onclick: (e) => {
+        G.sfx.tap(); L.hintsUsed++;
+        if (!unlimited) L.hintsLeft--;
+        const left = L.hintsLeft;
+        const note = unlimited ? null : left === 0 ? 'That was your last hint for this lesson. You’ve got this!' : `You have ${left} hint${left === 1 ? '' : 's'} left in this lesson.`;
+        hintBox.replaceChildren(tex(h('div', { class: 'hint' }, h('div', { html: hintHtml }),
+          note ? h('div', { class: 'hint-left' + (left === 0 ? ' last' : '') }, h('span', { class: 'hint-bulbs', 'aria-hidden': 'true' }, ...Array.from({ length: hintLimit() }, (_, i) => h('i', { class: i < left ? 'on' : '' }))), note) : null)));
+        if (note) V.say(left === 0 ? 'That was your last hint!' : `${left} hint${left === 1 ? '' : 's'} left!`, { delay: 150 });
+        e.currentTarget.remove();
+      } }, 'Hint', unlimited ? null : h('span', { class: 'hint-count tnum' }, String(L.hintsLeft)));
     }
     function grade() {
       if (phase !== 'answer' || !widget.ready()) return;
@@ -516,6 +535,7 @@
       if (crownsNow > startCrowns) extras.append(h('div', { class: 'res-badge' }, G.crownIcon(crownsNow, 26), crownsNow === 3 ? `${sk.title} mastered!` : `New crown! Level ${crownsNow} reached`));
       extras.append(h('div', { class: 'res-badge plain' }, `SmartScore ${startScore} → `, h('b', {}, String(sp.score))));
       if (perfect) extras.append(h('div', { class: 'res-badge' }, G.gem(22), `Perfect lesson! +${PERFECT_GEMS} gems`));
+      if (hintLimit() > 0) extras.append(h('div', { class: 'res-badge plain' }, `Hints used: ${L.hintsUsed} of ${hintLimit()}`));
       if (goalNow && !goalBefore) extras.append(h('div', { class: 'res-badge' }, '🎯', 'Daily goal complete!'));
       const title = done ? (perfect ? 'FLAWLESS VICTORY!' : 'VICTORY!') : 'Nice effort!';
       const trophyEl = h('b', { class: 'tnum' }, '+0');
@@ -926,6 +946,15 @@
   }
 
   // ---------- Parent view ----------
+  function hintCard() {
+    const opts = [[0, 'No hints'], [1, '1 per lesson'], [2, '2 per lesson'], [3, '3 per lesson (default)'], [5, '5 per lesson'], [-1, 'Unlimited']];
+    const msg = h('span', { class: 'muted', role: 'status', style: { fontSize: '.85rem' } });
+    return h('section', { class: 'card stack' }, h('h3', {}, 'Hints'),
+      h('p', { class: 'muted', style: { fontSize: '.9rem' } }, 'How many hints each kid can use in one lesson. The Hint button shows how many are left.'),
+      h('div', { class: 'row' }, h('label', { class: 'field', style: { flex: 1, minWidth: '200px' } },
+        h('select', { id: 'hint-limit', 'aria-label': 'Hints per lesson', onchange: (e) => { db.hintLimit = Number(e.target.value); save(); msg.textContent = 'Saved. Applies from the next lesson.'; } },
+          ...opts.map(([v, label]) => h('option', { value: v, selected: hintLimit() === v }, label)))), msg));
+  }
   function voiceCard() {
     const card = h('section', { class: 'card stack' }, h('h3', {}, 'Cheering voice'));
     const paint = () => {
@@ -987,6 +1016,7 @@
         h('div', { class: 'stack', style: { gap: '4px' } }, h('span', { class: 'eyebrow' }, 'Parent view'), h('h1', {}, 'Progress report')),
         h('div', { class: 'row' }, h('button', { class: 'btn-small', onclick: () => go('setup') }, 'Edit players'), h('button', { class: 'btn-small', onclick: () => go('profiles') }, 'Done'))),
       h('p', { class: 'muted' }, '“Needs help” appears when accuracy is under 60% after 10+ questions, after 3 misses in a row, or when the SmartScore has dropped 15+ points from its best.'),
+      hintCard(),
       voiceCard(),
       ...db.profiles.map(kidCard));
     shell(content);
