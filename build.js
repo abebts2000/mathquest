@@ -22,7 +22,7 @@ const katexJs = local
   ? `<script src="file://${ROOT}/vendor/katex/katex.min.js"></script>\n<script src="file://${ROOT}/vendor/katex/contrib/auto-render.min.js"></script>`
   : `<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/${KATEX_VER}/katex.min.js"></script>\n<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/${KATEX_VER}/contrib/auto-render.min.js"></script>`;
 
-const scripts = ['src/core.js', 'src/dom.js', 'src/tracks/grade3.js', 'src/tracks/grade7.js', 'src/tracks/geometry.js', 'src/app.js']
+const scripts = ['src/core.js', 'src/dom.js', 'src/tracks/grade3.js', 'src/tracks/grade7.js', 'src/tracks/geometry.js', 'src/widgets.js', 'src/game.js', 'src/app.js']
   .map((f) => `<script>/* ${f} */\n${read(f).replace(/<\/script/gi, '<\\/script')}\n</script>`).join('\n');
 
 const html = `<title>MathQuest</title>

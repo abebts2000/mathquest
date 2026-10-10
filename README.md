@@ -12,6 +12,16 @@ Math practice for one family: a 3rd grader, a 7th grader and a Geometry student.
 | Grade 7 | Integers & rational numbers, proportional relationships, percent problems, two-step equations & inequalities, circles | Balance Scale, Integer Chips, Double Number Line, Circle Unroller |
 | Geometry | Angle relationships, triangle congruence & proofs, Pythagorean theorem & special right triangles, transformations, coordinate geometry | Triangle Explorer, Transformation Studio |
 
+## How it plays
+
+- **Skill path:** each track is a winding path of skill nodes with crowns (levels 1–3) and Math Lab chests along the way.
+- **Lessons:** 10 correct answers finish a lesson. Missed questions show the worked solution, then the lesson keeps going.
+- **XP & combos:** +5 XP per correct answer, +5 bonus every 5 in a row, +20 for finishing, +15 for a perfect lesson.
+- **Daily goal & streaks:** 100 XP a day; a flame streak that grows each day you practise, protected by streak freezes.
+- **Gems & quests:** three daily quests open reward chests with gems; gems buy streak freezes.
+- **Family league:** everyone's XP for the last 7 days, ranked.
+- **Effects:** synthesized sound effects (mute button in the top bar), haptics on phones, confetti, combo bursts, and Pip the mascot.
+
 Every problem is generated from a seeded template, so practice never runs out. Each skill has three difficulty levels picked by SmartScore (level 1 below 40, level 2 from 40, level 3 from 75).
 
 Kid profiles, PINs and progress are stored in the browser's local storage on each device. Nothing is sent to a server.
@@ -22,7 +32,9 @@ Kid profiles, PINs and progress are stored in the browser's local storage on eac
 src/core.js            track registry, seeded RNG, math helpers, answer checking, SmartScore rules (no DOM)
 src/dom.js             DOM/SVG helpers and drag support shared with Lab tools
 src/tracks/*.js        one file per track: skill generators + Math Lab tools
-src/app.js             the UI: setup, profiles, practice loop, input widgets, Math Lab, parent view
+src/widgets.js         answer widgets: number, fraction, choice, number line, clock, grid point, ordering
+src/game.js            game layer: XP rules, quests, sound effects, mascot, confetti
+src/app.js             the UI: setup, profiles, skill path, lessons, Math Lab, parent view
 src/styles.css         theme (light + dark) and components
 CONTRACT.md            the interface every track file follows — read this before adding skills
 build.js               bundles everything into one HTML file
@@ -38,6 +50,7 @@ No dependencies to install for building or the generator checks.
 ```sh
 node test/harness.js                 # check all skills (or pass one track file)
 node build.js                        # → dist/index.html, the deployable site
+node build.js --artifact             # → dist/artifact.html, body-only version for Claude artifacts
 node build.js --local                # → test/dev.html, works offline from file://
 node test/e2e.js                     # browser test (needs Playwright + Chromium)
 ```

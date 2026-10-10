@@ -30,35 +30,47 @@ const PER_SKILL = Number(process.env.PER_SKILL || 6);
 
   const kids = [['Mia', 'g3'], ['Leo', 'g7'], ['Ada', 'geo']];
   const results = [];
+  const LESSONS = Number(process.env.LESSONS || 1);
   for (const [kid, track] of kids) {
     await page.click(`.profile-btn:has-text("${kid}")`);
-    const skills = await page.$$eval('.skill', (els) => els.length);
     await shot(`03-home-${track}`);
-    for (let si = 0; si < skills; si++) {
-      await page.locator('.skill').nth(si).click();
-      const types = {}; let firstWrongShot = false; let scoreStart = null;
-      for (let q = 0; q < PER_SKILL; q++) {
-        await page.waitForSelector('.qcard [data-primary]'); await page.waitForTimeout(60);
-        const pr = await page.evaluate(() => { const p = window.__MQ_TEST__.problem; return { input: p.input, answer: p.answer, prompt: p.prompt }; });
-        types[pr.input.type] = (types[pr.input.type] || 0) + 1;
-        if (q === 0) { scoreStart = Number(await page.textContent('.score-box.smart b')); await shot(`q-${track}-${si}-${pr.input.type}`); }
-        const wantWrong = q === 1 && !firstWrongShot;
-        await answer(page, pr, wantWrong);
-        if (await page.$('.qcard [data-primary][disabled]')) { await shot(`stuck-${track}-${si}`); throw new Error(`Submit disabled for ${pr.input.type}: ${JSON.stringify(pr.input).slice(0, 300)} answer=${JSON.stringify(pr.answer)}`); }
-        await page.click('.qcard [data-primary]');
-        await page.waitForSelector('.feedback');
-        const ok = await page.$('.feedback.ok');
-        if (!wantWrong && !ok) errors.push(`${track} skill ${si} q${q} (${pr.input.type}): correct answer marked wrong. answer=${JSON.stringify(pr.answer)} prompt=${pr.prompt.slice(0, 100)}`);
-        if (wantWrong) { firstWrongShot = true; await shot(`w-${track}-${si}-${pr.input.type}`); if (ok) errors.push(`${track} skill ${si}: wrong answer marked correct (${pr.input.type})`); }
-        await page.click('.qcard [data-primary]');
+    const nSkills = await page.$$eval('.node', (els) => els.length);
+    for (let si = 0; si < nSkills; si++) {
+      for (let les = 0; les < LESSONS; les++) {
+        await page.locator('.node').nth(si).click();
+        if (si === 0 && les === 0) await shot(`03b-pop-${track}`);
+        await page.click('.pop-go');
+        const types = {}; let wrongDone = false, q = 0;
+        while (await page.$('.lesson-top:not([hidden])')) {
+          await page.waitForSelector('.lesson-foot [data-primary]'); await page.waitForTimeout(70);
+          const pr = await page.evaluate(() => { const p = window.__MQ_TEST__.problem; return { input: p.input, answer: p.answer, prompt: p.prompt }; });
+          types[pr.input.type] = (types[pr.input.type] || 0) + 1;
+          if (q === 0 && les === 0) await shot(`q-${track}-${si}-${pr.input.type}`, false);
+          const wantWrong = q === 2 && les === 0 && !wrongDone;
+          await answer(page, pr, wantWrong);
+          if (await page.$('.lesson-foot [data-primary][disabled]')) { await shot(`stuck-${track}-${si}`); throw new Error(`Check disabled for ${pr.input.type}: ${JSON.stringify(pr.input).slice(0, 300)}`); }
+          await page.click('.lesson-foot [data-primary]');
+          await page.waitForSelector('.lesson-foot.good, .lesson-foot.bad');
+          const ok = await page.$('.lesson-foot.good');
+          if (!wantWrong && !ok) errors.push(`${track} skill ${si} q${q} (${pr.input.type}): correct answer marked wrong. answer=${JSON.stringify(pr.answer)} prompt=${pr.prompt.slice(0, 100)}`);
+          if (wantWrong) { wrongDone = true; if (les === 0 && si < 2) await shot(`w-${track}-${si}`, false); if (ok) errors.push(`${track} skill ${si}: wrong answer marked correct (${pr.input.type})`); }
+          if (ok && q === 4 && si === 0 && les === 0) { await page.waitForTimeout(300); await shot(`combo-${track}`, false); }
+          await page.click('.lesson-foot [data-primary]');
+          q++;
+          if (q > 40) throw new Error('lesson never ended');
+        }
+        await page.waitForTimeout(1000);
+        if (si === 0 && les === 0) await shot(`r-${track}`, false);
+        await page.click('.lesson-foot [data-primary]');
+        if (await page.$('.streak-screen')) { await page.waitForTimeout(900); if (si === 0) await shot(`streak-${track}`, false); await page.click('.lesson-foot [data-primary]'); }
+        results.push(`${track}#${si}.${les} q=${q} types=${JSON.stringify(types)}`);
       }
-      const scoreEnd = Number(await page.textContent('.score-box.smart b'));
-      results.push(`${track}#${si} types=${JSON.stringify(types)} smart ${scoreStart}→${scoreEnd}`);
-      await page.click('text=‹ Skills');
     }
     await shot(`04-home-after-${track}`);
-    // open first lab of this track
-    await page.click('button:has-text("Math Lab")');
+    // claim any open quest chests
+    for (let k = 0; k < 4; k++) { const b = await page.$('.chest-btn.wiggle'); if (!b) break; await b.click(); if (k === 0) { await page.waitForTimeout(350); await shot(`04c-chest-${track}`, false); } await page.waitForTimeout(1300); }
+    await shot(`04b-home-claimed-${track}`);
+    await page.click('.banner-btn');
     await page.locator(`section[data-track="${track}"] .lab-tile`).first().click();
     await shot(`05-lab-${track}`);
     await page.click('.who');
@@ -83,7 +95,7 @@ async function answer(page, pr, wrong) {
   if (t === 'numberline' || t === 'point' || t === 'clock' || t === 'order') {
     await page.evaluate(([t, a, spec, wrong]) => {
       // Drive the widget through real pointer events / buttons.
-      const s = document.querySelector('.qcard .widget svg, .qcard svg[role="img"]');
+      const s = document.querySelector('.lesson-card .widget svg, .lesson-card svg[role="img"]');
       const fire = (el, type, x, y) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerId: 1, isPrimary: true }));
       const toClient = (svgEl, ux, uy) => { const p = svgEl.createSVGPoint(); p.x = ux; p.y = uy; const m = svgEl.getScreenCTM(); const r = p.matrixTransform(m); return [r.x, r.y]; };
       if (t === 'numberline') {
@@ -97,7 +109,7 @@ async function answer(page, pr, wrong) {
         const [x, y] = toClient(s, pad + (px - spec.xmin) * cell, pad + (spec.ymax - a.y) * cell);
         fire(s, 'pointerdown', x, y); fire(s, 'pointerup', x, y);
       } else if (t === 'clock') {
-        const btn = (lbl) => document.querySelector(`.qcard button[aria-label="${lbl}"]`);
+        const btn = (lbl) => document.querySelector(`.lesson-card button[aria-label="${lbl}"]`);
         // clock starts at 12:00; press hour forward and minute buttons
         const H = wrong ? (a.h % 12) + 1 : a.h;
         for (let i = 0; i < H % 12; i++) btn('Hour forward').click();
@@ -107,16 +119,16 @@ async function answer(page, pr, wrong) {
       } else if (t === 'order') {
         // selection sort with the up buttons into the target order (or a wrong swap)
         const target = wrong ? a.slice().reverse() : a;
-        const orig = [...document.querySelectorAll('.qcard .order-item .txt')].map((e) => e.textContent);
-        const items = () => [...document.querySelectorAll('.qcard .order-item .txt')].map((e) => String(orig.indexOf(e.textContent)));
+        const orig = [...document.querySelectorAll('.lesson-card .order-item .txt')].map((e) => e.textContent);
+        const items = () => [...document.querySelectorAll('.lesson-card .order-item .txt')].map((e) => String(orig.indexOf(e.textContent)));
         for (let pos = 0; pos < target.length; pos++) {
           let cur = items().indexOf(String(target[pos]));
-          while (cur > pos) { document.querySelectorAll('.qcard .order-item')[cur].querySelector('[aria-label="Move up"]').click(); cur--; }
+          while (cur > pos) { document.querySelectorAll('.lesson-card .order-item')[cur].querySelector('[aria-label="Move up"]').click(); cur--; }
         }
-        if (JSON.stringify(target) === JSON.stringify(a) && !document.querySelector('.qcard [data-primary]:not([disabled])')) {
+        if (JSON.stringify(target) === JSON.stringify(a) && !document.querySelector('.lesson-card [data-primary]:not([disabled])')) {
           // already in order: nudge down and back up so "moved" is true
-          document.querySelectorAll('.qcard .order-item')[0].querySelector('[aria-label="Move down"]').click();
-          document.querySelectorAll('.qcard .order-item')[1].querySelector('[aria-label="Move up"]').click();
+          document.querySelectorAll('.lesson-card .order-item')[0].querySelector('[aria-label="Move down"]').click();
+          document.querySelectorAll('.lesson-card .order-item')[1].querySelector('[aria-label="Move up"]').click();
         }
       }
     }, [t, a, pr.input, wrong]);
