@@ -20,6 +20,7 @@
   let db = load();
   G.setMuted(db.muted);
   V.setEnabled(!db.muted && !db.voiceOff);
+  if (V.choose) V.choose(db.voiceName);
   function load() {
     try { const raw = localStorage.getItem(KEY); if (raw) return Object.assign(blank(), JSON.parse(raw)); } catch (e) { /* storage unavailable */ }
     return blank();
@@ -923,6 +924,23 @@
   }
 
   // ---------- Parent view ----------
+  function voiceCard() {
+    const card = h('section', { class: 'card stack' }, h('h3', {}, 'Cheering voice'));
+    const paint = () => {
+      const names = V.voices ? V.voices() : [];
+      const preview = h('button', { class: 'btn-small', onclick: () => V.say('Good job! Well done! Woo hoo!', { priority: 2 }) }, '▶ Preview');
+      if (!V.supported) { card.replaceChildren(h('h3', {}, 'Cheering voice'), h('p', { class: 'muted' }, 'This browser can’t speak, so only sound effects will play.')); return; }
+      const sel = h('select', { id: 'voice-pick', 'aria-label': 'Voice', onchange: (e) => { db.voiceName = e.target.value; save(); V.choose(db.voiceName); V.say('Hi! I’ll cheer you on!', { priority: 2 }); } },
+        h('option', { value: '', selected: !db.voiceName }, 'Best American voice (automatic)'),
+        ...names.map((n) => h('option', { value: n, selected: db.voiceName === n }, n)));
+      card.replaceChildren(h('h3', {}, 'Cheering voice'),
+        h('p', { class: 'muted', style: { fontSize: '.9rem' } }, names.length ? `American English voices on this device: ${names.length}. Pick the one the kids like best.` : 'Uses this device’s American English voice.'),
+        h('div', { class: 'row' }, names.length ? h('label', { class: 'field', style: { flex: 1, minWidth: '200px' } }, sel) : null, preview));
+    };
+    paint();
+    try { window.speechSynthesis.addEventListener('voiceschanged', () => { if (card.isConnected) paint(); }, { once: true }); } catch (e) { /* ignore */ }
+    return card;
+  }
   function viewParent() {
     let confirmReset = null;
     const fmtTime = (s) => (s >= 3600 ? Math.floor(s / 3600) + 'h ' : '') + Math.round((s % 3600) / 60) + 'm';
@@ -967,6 +985,7 @@
         h('div', { class: 'stack', style: { gap: '4px' } }, h('span', { class: 'eyebrow' }, 'Parent view'), h('h1', {}, 'Progress report')),
         h('div', { class: 'row' }, h('button', { class: 'btn-small', onclick: () => go('setup') }, 'Edit players'), h('button', { class: 'btn-small', onclick: () => go('profiles') }, 'Done'))),
       h('p', { class: 'muted' }, '“Needs help” appears when accuracy is under 60% after 10+ questions, after 3 misses in a row, or when the SmartScore has dropped 15+ points from its best.'),
+      voiceCard(),
       ...db.profiles.map(kidCard));
     shell(content);
   }

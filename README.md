@@ -25,7 +25,7 @@ Math practice for one family: a 3rd grader, a 7th grader and a Geometry student.
 - **Trophies & Trophy Road:** finished lessons earn trophies (more for fewer mistakes); milestones unlock gems, reward drops, skins, hats and pins.
 - **Reward drops:** one per finished lesson; each tap can upgrade it from Rare up to Legendary before it opens.
 - **Collection:** dress up Pip with skins and hats, and wear a pin next to your name.
-- **Sound & voice:** punchy synthesized effects (drums, chord stabs, sparkles, risers) and a cheering voice ("Good job!", "Well done!", "Woo hoo!", "Double!", "Legendary!") using the device's built-in text-to-speech. The top-bar button cycles sound + voice → sound only → muted.
+- **Sound & voice:** punchy synthesized effects (drums, chord stabs, sparkles, risers) and a cheering American-English voice ("Good job!", "Well done!", "Woo hoo!", "Double!", "Legendary!") using the device's built-in text-to-speech. The top-bar button cycles sound + voice → sound only → muted.
 - **Effects:** haptics on phones, confetti, combo callouts, screen shake, and Pip the mascot.
 
 Every problem is generated from a seeded template, so practice never runs out. Each skill has three difficulty levels picked by SmartScore (level 1 below 40, level 2 from 40, level 3 from 75).

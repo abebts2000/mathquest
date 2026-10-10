@@ -4,14 +4,20 @@
   'use strict';
   const synth = window.speechSynthesis;
   const supported = !!(synth && window.SpeechSynthesisUtterance);
-  let enabled = true, voice = null, lastAt = 0, lastLine = '';
-  // Natural-sounding voices first (names differ by device and browser).
-  const PREFERRED = [/Samantha/i, /Ava \(Premium|Enhanced\)/i, /Google US English/i, /Jenny.*Natural|Aria.*Natural|Ana.*Natural/i, /Natural/i, /Premium|Enhanced/i, /Allison|Ava|Susan|Karen|Moira|Tessa|Zira|Joanna/i];
+  let enabled = true, voice = null, lastAt = 0, lastLine = '', chosenName = '';
+  // American English only. Natural-sounding US voices first (names differ by device and browser).
+  const US = (v) => /^en[-_]US$/i.test(v.lang);
+  const NOT_US = /Daniel|Karen|Moira|Tessa|Rishi|Veena|Fiona|Serena|Hazel|Libby|Sonia|Ryan|Arthur|Martha|Catherine|Gordon|UK English|British|Australia|Ireland|India|Scotland|South Africa/i;
+  const PREFERRED = [/^Samantha/i, /Ava.*(Premium|Enhanced)/i, /Zoe.*(Premium|Enhanced)/i, /(Premium|Enhanced)/i, /Google US English/i, /(Aria|Jenny|Ana|Michelle|Emma).*Natural/i, /Natural/i, /^(Ava|Allison|Susan|Zoe|Nicky|Joelle|Evan|Tom|Alex)\b/i, /Zira|Aria|Jenny|David|Mark/i];
+  function usVoices() {
+    if (!supported) return [];
+    return synth.getVoices().filter((v) => US(v) && !NOT_US.test(v.name));
+  }
   function pickVoice() {
-    if (!supported) return null;
-    const vs = synth.getVoices().filter((v) => /^en([-_]|$)/i.test(v.lang));
+    const vs = usVoices();
+    if (chosenName) { const c = vs.find((v) => v.name === chosenName); if (c) return c; }
     for (const re of PREFERRED) { const v = vs.find((x) => re.test(x.name)); if (v) return v; }
-    return vs.find((v) => /en[-_]US/i.test(v.lang)) || vs[0] || null;
+    return vs[0] || null; // none found: speak with lang en-US and let the device pick its US voice
   }
   if (supported) {
     voice = pickVoice();
@@ -28,7 +34,8 @@
         if (priority < 2 && synth.speaking && Date.now() - lastAt < 2500) return;
         if (priority >= 2 || synth.speaking) synth.cancel();
         const u = new SpeechSynthesisUtterance(text);
-        if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-US';
+        if (!voice) voice = pickVoice();
+        u.lang = 'en-US'; if (voice) u.voice = voice;
         u.pitch = pitch; u.rate = rate; u.volume = 1;
         synth.speak(u); lastAt = Date.now();
         if (window.__MQ_TEST__) (window.__MQ_TEST__.said = window.__MQ_TEST__.said || []).push(text);
@@ -69,6 +76,10 @@
   }
   window.MathQuestVoice = {
     supported, say, line,
+    // Parent view: list the American voices on this device and remember a choice.
+    voices: () => usVoices().map((v) => v.name),
+    get current() { return voice ? voice.name : ''; },
+    choose(name) { chosenName = name || ''; voice = pickVoice(); },
     setEnabled(v) { enabled = !!v; if (!enabled && supported) try { synth.cancel(); } catch (e) { /* ignore */ } },
     get enabled() { return enabled; }
   };
