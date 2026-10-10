@@ -26,43 +26,112 @@
   }
 
   // ---------- Sound (synthesised with Web Audio; no files) ----------
-  let actx = null, muted = false;
+  // A small mixing desk: everything goes through a compressor (loud but no clipping) with a reverb send.
+  let actx = null, muted = false, master = null, verb = null, noiseBuf = null;
   function ctx() {
     if (muted) return null;
     try {
-      if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; actx = new AC(); }
+      if (!actx) {
+        const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+        actx = new AC();
+        const comp = actx.createDynamicsCompressor();
+        comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.2;
+        master = actx.createGain(); master.gain.value = 0.9;
+        master.connect(comp).connect(actx.destination);
+        // short bright room reverb from a generated impulse
+        const len = Math.floor(actx.sampleRate * 1.1), ir = actx.createBuffer(2, len, actx.sampleRate);
+        for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+        verb = actx.createConvolver(); verb.buffer = ir;
+        const wet = actx.createGain(); wet.gain.value = 0.22; verb.connect(wet).connect(master);
+        noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+        const nd = noiseBuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+      }
       if (actx.state === 'suspended') actx.resume();
       return actx;
     } catch (e) { return null; }
   }
-  function tone(freq, start, dur, type = 'sine', vol = 0.18, slideTo) {
+  function out(node, wet = true) { node.connect(master); if (wet) node.connect(verb); }
+  function tone(freq, start, dur, type = 'sine', vol = 0.18, slideTo, wet = true) {
     const c = ctx(); if (!c) return;
     const t0 = c.currentTime + start;
     const o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.setValueAtTime(freq, t0);
     if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g).connect(c.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+    o.connect(g); out(g, wet); o.start(t0); o.stop(t0 + dur + 0.05);
   }
+  // Fat detuned saw chord through a low-pass sweep: the "stab" sound of game menus.
+  function stab(freqs, start, dur = 0.35, vol = 0.07, bright = 3200) {
+    const c = ctx(); if (!c) return;
+    const t0 = c.currentTime + start;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 6;
+    f.frequency.setValueAtTime(bright, t0); f.frequency.exponentialRampToValueAtTime(600, t0 + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    f.connect(g); out(g);
+    for (const fr of freqs) for (const det of [-9, 9]) {
+      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = fr; o.detune.value = det;
+      o.connect(f); o.start(t0); o.stop(t0 + dur + 0.05);
+    }
+  }
+  function noise(start, dur, { vol = 0.3, type = 'bandpass', freq = 1800, to, q = 1, wet = true } = {}) {
+    const c = ctx(); if (!c) return;
+    const t0 = c.currentTime + start;
+    const s = c.createBufferSource(); s.buffer = noiseBuf;
+    const f = c.createBiquadFilter(); f.type = type; f.Q.value = q; f.frequency.setValueAtTime(freq, t0);
+    if (to) f.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    s.connect(f).connect(g); out(g, wet); s.start(t0, Math.random() * 0.5); s.stop(t0 + dur + 0.05);
+  }
+  const kick = (t, v = 0.9) => tone(150, t, 0.22, 'sine', v, 42, false);
+  const snare = (t, v = 0.35) => { noise(t, 0.16, { vol: v, freq: 2200, q: 0.8 }); tone(190, t, 0.08, 'triangle', 0.12, 140, false); };
+  const clap = (t, v = 0.3) => { for (const d of [0, 0.012, 0.024]) noise(t + d, 0.09, { vol: v, freq: 1400, q: 1.4 }); };
+  const hat = (t, v = 0.12) => noise(t, 0.05, { vol: v, type: 'highpass', freq: 7000, wet: false });
+  const sparkle = (t, base = 1568, n = 6, v = 0.07) => { for (let i = 0; i < n; i++) tone(base * Math.pow(2, (i * 4) / 12), t + i * 0.035, 0.18, 'sine', v); };
+  const whoosh = (t, dur = 0.45, up = true, v = 0.28) => noise(t, dur, { vol: v, freq: up ? 400 : 5000, to: up ? 6000 : 300, q: 2 });
+  const N = (semi) => 440 * Math.pow(2, (semi - 9) / 12); // semitones from C4
+
   const sfx = {
-    tap() { tone(660, 0, 0.05, 'triangle', 0.06); },
+    tap() { tone(900, 0, 0.06, 'triangle', 0.1, 1300, false); },
     correct(combo = 0) {
-      const lift = Math.pow(2, Math.min(combo, 8) / 24); // each combo step nudges the pitch up
-      tone(784 * lift, 0, 0.12, 'sine', 0.2); tone(1175 * lift, 0.09, 0.22, 'sine', 0.2); tone(1568 * lift, 0.09, 0.22, 'triangle', 0.05);
+      const k = Math.min(combo, 10), up = Math.pow(2, k / 12); // climbs a semitone per combo step
+      kick(0, 0.5); clap(0.01, 0.22);
+      tone(N(12) * 2 * up, 0, 0.14, 'square', 0.07); tone(N(16) * 2 * up, 0.07, 0.16, 'square', 0.07); tone(N(19) * 2 * up, 0.14, 0.32, 'square', 0.08);
+      tone(N(24) * 2 * up, 0.14, 0.4, 'sine', 0.14);
+      sparkle(0.18, 2093 * up, 4, 0.05);
     },
-    wrong() { tone(311, 0, 0.16, 'triangle', 0.18); tone(233, 0.13, 0.28, 'triangle', 0.18, 196); },
-    combo() { [880, 1109, 1319, 1760].forEach((f, i) => tone(f, i * 0.06, 0.14, 'square', 0.05)); },
-    complete() { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.11, 0.3, 'triangle', 0.16)); tone(1568, 0.48, 0.5, 'sine', 0.12); },
-    streak() { [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.08, 0.25, 'sawtooth', 0.05)); },
-    chest() { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, i * 0.07, 0.2, 'sine', 0.12)); },
-    thump() { tone(140, 0, 0.18, 'sine', 0.3, 70); tone(320, 0, 0.06, 'square', 0.04); },
-    upgrade(step = 0) { const b = 523 * Math.pow(2, step / 4); [b, b * 1.25, b * 1.5, b * 2].forEach((f, i) => tone(f, i * 0.05, 0.18, 'square', 0.06)); tone(b * 2, 0.2, 0.4, 'triangle', 0.12); },
-    open() { tone(90, 0, 0.35, 'sawtooth', 0.12, 40); [784, 988, 1175, 1568, 1976].forEach((f, i) => tone(f, 0.12 + i * 0.06, 0.3, 'triangle', 0.12)); },
-    trophy() { [1319, 1568].forEach((f, i) => tone(f, i * 0.08, 0.25, 'sine', 0.15)); },
-    levelup() { [392, 494, 587, 784, 988, 1175, 1568].forEach((f, i) => tone(f, i * 0.09, 0.35, 'square', 0.06)); tone(196, 0, 0.9, 'sawtooth', 0.05); },
-    callout() { tone(220, 0, 0.12, 'square', 0.08, 440); tone(660, 0.08, 0.2, 'triangle', 0.1); }
+    wrong() { tone(N(4), 0, 0.18, 'triangle', 0.2, N(1)); tone(N(-1), 0.16, 0.34, 'triangle', 0.2, N(-5)); noise(0, 0.25, { vol: 0.08, freq: 500, q: 3 }); },
+    combo() { whoosh(0, 0.35); kick(0.3); snare(0.3); stab([N(12), N(16), N(19), N(24)], 0.3, 0.5, 0.08); sparkle(0.36, 1568, 6); },
+    callout() { whoosh(0, 0.3); kick(0.26); clap(0.26, 0.3); stab([N(7), N(11), N(14)], 0.26, 0.32, 0.07); },
+    complete() {
+      // drum fill into a big major fanfare
+      [0, 0.12, 0.24].forEach((t) => snare(t, 0.25)); kick(0.36); snare(0.36, 0.4);
+      stab([N(12), N(16), N(19)], 0.36, 0.25, 0.08); stab([N(14), N(17), N(21)], 0.62, 0.25, 0.08);
+      kick(0.88); stab([N(16), N(19), N(24), N(28)], 0.88, 0.9, 0.1, 5000);
+      [0.88, 1.0, 1.12, 1.24].forEach((t) => hat(t));
+      sparkle(0.95, 2093, 7, 0.06);
+    },
+    streak() { whoosh(0, 0.5); kick(0.45); clap(0.45, 0.35); stab([N(7), N(12), N(16), N(19)], 0.45, 0.8, 0.09); [0.45, 0.57, 0.69, 0.81].forEach((t, i) => tone(N(19 + i * 5) * 2, t, 0.25, 'square', 0.05)); },
+    chest() { whoosh(0, 0.25); kick(0.2, 0.6); sparkle(0.2, 1319, 6, 0.08); tone(N(31) * 2, 0.42, 0.5, 'sine', 0.1); },
+    thump() { kick(0, 0.9); noise(0, 0.12, { vol: 0.2, type: 'lowpass', freq: 900 }); tone(320, 0, 0.06, 'square', 0.05, 160, false); },
+    upgrade(step = 0) {
+      const b = N(12 + step * 3);
+      whoosh(0, 0.3, true, 0.25); kick(0.28); clap(0.28, 0.3);
+      stab([b, b * 1.26, b * 1.5, b * 2], 0.28, 0.6, 0.09, 5200);
+      sparkle(0.3, b * 4, 6, 0.06);
+    },
+    open() {
+      whoosh(0, 0.6, true, 0.35); kick(0.55, 1); snare(0.55, 0.45); noise(0.55, 0.8, { vol: 0.3, type: 'lowpass', freq: 3000, to: 200 });
+      stab([N(12), N(16), N(19), N(24)], 0.6, 1.1, 0.11, 6000); sparkle(0.62, 2093, 8, 0.07);
+    },
+    trophy() { tone(N(28) * 2, 0, 0.2, 'square', 0.06); tone(N(31) * 2, 0.08, 0.4, 'sine', 0.14); clap(0, 0.2); },
+    levelup() {
+      [0, 0.1, 0.2, 0.3].forEach((t) => snare(t, 0.25 + t)); whoosh(0, 0.45);
+      kick(0.42); stab([N(12), N(16), N(19)], 0.42, 0.3, 0.09); kick(0.72); stab([N(17), N(21), N(24)], 0.72, 0.3, 0.09);
+      kick(1.02); snare(1.02, 0.45); stab([N(19), N(23), N(26), N(31)], 1.02, 1.3, 0.12, 6500); sparkle(1.08, 2093, 8, 0.07);
+      [1.02, 1.14, 1.26, 1.38, 1.5].forEach((t) => hat(t, 0.1));
+    }
   };
   function setMuted(m) { muted = !!m; }
   function buzz(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* not allowed here */ } }

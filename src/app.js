@@ -6,6 +6,7 @@
   const Cloud = window.MathQuestCloud || { enabled: false };
   const R = window.MathQuestRewards;
   const A = window.MathQuestArena;
+  const V = window.MathQuestVoice || { line() {}, say() {}, setEnabled() {}, supported: false };
   const { h, svg, tex } = window.MathQuestDOM;
   const { makeWidget, answerText } = window.MathQuestWidgets;
   const app = document.getElementById('app');
@@ -18,6 +19,7 @@
   const blank = () => ({ profiles: [], progress: {}, days: {}, parentPin: '', gems: {}, freezes: {}, frozen: {}, muted: false, trophies: {}, drops: {}, inv: {}, road: {}, arenaSeen: {} });
   let db = load();
   G.setMuted(db.muted);
+  V.setEnabled(!db.muted && !db.voiceOff);
   function load() {
     try { const raw = localStorage.getItem(KEY); if (raw) return Object.assign(blank(), JSON.parse(raw)); } catch (e) { /* storage unavailable */ }
     return blank();
@@ -70,10 +72,19 @@
   const me = () => db.profiles.find((p) => p.id === state.pid);
 
   // ---------- Shell ----------
+  // One button cycles: sound + voice → sound only → muted.
   function soundToggle() {
-    const b = h('button', { class: 'icon-btn', 'aria-label': db.muted ? 'Turn sound on' : 'Turn sound off', title: db.muted ? 'Sound off' : 'Sound on', onclick: () => {
-      db.muted = !db.muted; G.setMuted(db.muted); save(); b.replaceWith(soundToggle()); if (!db.muted) G.sfx.correct();
-    } }, db.muted ? '🔇' : '🔊');
+    const mode = db.muted ? 'off' : db.voiceOff || !V.supported ? 'sound' : 'voice';
+    const next = { voice: 'sound', sound: 'off', off: V.supported ? 'voice' : 'sound' }[mode];
+    const label = { voice: 'Sound and voice on', sound: 'Sound on, voice off', off: 'Sound off' }[mode];
+    const b = h('button', { class: 'icon-btn sound-' + mode, 'aria-label': label + '. Tap to change.', title: label, onclick: () => {
+      db.muted = next === 'off'; db.voiceOff = next !== 'voice'; save();
+      G.setMuted(db.muted); V.setEnabled(next === 'voice');
+      b.replaceWith(soundToggle());
+      if (next === 'voice') { G.sfx.correct(); V.say('Voice on! Woo hoo!', { priority: 2 }); }
+      else if (next === 'sound') G.sfx.correct();
+      toast({ voice: 'Sound and voice on', sound: 'Voice off, sound on', off: 'Sound off' }[next]);
+    } }, { voice: '🗣️', sound: '🔊', off: '🔇' }[mode]);
     return b;
   }
   function statPill(icon, value, label, cls) { return h('span', { class: 'stat-pill ' + (cls || ''), title: label, 'aria-label': value + ' ' + label }, icon, h('b', { class: 'tnum' }, String(value))); }
@@ -212,6 +223,7 @@
   }
   function greeting() { const hr = new Date().getHours(); return hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening'; }
 
+  const greeted = {};
   function viewHome() {
     const p = me(); if (!p) return go('profiles');
     const usedFreeze = applyFreezes(p.id);
@@ -286,6 +298,7 @@
         path),
       h('aside', { class: 'home-side stack', style: { gap: '16px' } }, questsCard(p), Cloud.enabled ? friendsCard(p) : null, freezeCard(p), leagueCard(p)));
     shell(content, { profile: p, track: tr.id });
+    if (!greeted[p.id]) { greeted[p.id] = true; V.line('hello', { name: p.name }, { delay: 400 }); }
     const tierNow = tierOf(p.id);
     if (tierNow > (db.arenaSeen[p.id] || 0)) { db.arenaSeen[p.id] = tierNow; save(); setTimeout(() => arenaUnlocked(p, tierNow), 450); }
     if (usedFreeze) setTimeout(() => toast(`A streak freeze saved your streak! (${usedFreeze} day${usedFreeze > 1 ? 's' : ''} covered)`), 400);
@@ -311,7 +324,7 @@
           const t = todayLog(p.id); t.claimed = (t.claimed || []).concat(q.id);
           db.gems[p.id] = (db.gems[p.id] || 0) + QUEST_GEMS; save();
           btn.replaceChildren(G.chest(true, 40)); btn.classList.remove('wiggle'); btn.disabled = true;
-          G.sfx.chest(); G.buzz(20); G.floatText(btn, `+${QUEST_GEMS} gems`, 'gem');
+          G.sfx.chest(); G.buzz(20); G.floatText(btn, `+${QUEST_GEMS} gems`, 'gem'); V.line('gems', { n: QUEST_GEMS }, { priority: 2, delay: 200 });
           const r = btn.getBoundingClientRect(); G.confetti({ count: 50, x: r.left + r.width / 2, y: r.top });
           setTimeout(() => go('home', { pid: p.id, track: state.track }), 1100);
         } }, G.chest(false, 40));
@@ -439,12 +452,14 @@
 
       if (ok) {
         G.sfx.correct(L.combo); G.buzz(12);
+        if (!comboHit && !({ 2: 1, 3: 1, 4: 1 })[L.combo]) V.line('correct', null, { delay: 180 });
         G.floatText(top.querySelector('.lbar'), '+' + gained + ' XP', 'xp');
         const CALL = { 2: ['DOUBLE!', '#2f9bff'], 3: ['TRIPLE!', '#b05cff'], 4: ['ON FIRE!', '#ff8a1f'] };
-        if (comboHit) setTimeout(() => { G.sfx.combo(); R.callout('UNSTOPPABLE!', '#ff3d6e', `${L.combo} in a row · +${G.XP.comboBonus} bonus XP`); R.shakeScreen('big'); }, 200);
-        else if (CALL[L.combo]) setTimeout(() => { G.sfx.callout(); R.callout(CALL[L.combo][0], CALL[L.combo][1]); R.shakeScreen(); }, 150);
+        if (comboHit) setTimeout(() => { G.sfx.combo(); R.callout('UNSTOPPABLE!', '#ff3d6e', `${L.combo} in a row · +${G.XP.comboBonus} bonus XP`); R.shakeScreen('big'); V.line('unstoppable', null, { priority: 2, pitch: 1.3, rate: 1.12 }); }, 200);
+        else if (CALL[L.combo]) setTimeout(() => { G.sfx.callout(); R.callout(CALL[L.combo][0], CALL[L.combo][1]); R.shakeScreen(); V.line('combo', { key: L.combo }, { priority: 2, pitch: 1.3, rate: 1.12 }); }, 150);
       } else {
         G.sfx.wrong(); G.buzz([30, 50, 30]); G.restartAnim(card, 'shake');
+        V.line('wrong', null, { delay: 250, pitch: 1.12, rate: 1 });
       }
       const cont = h('button', { class: 'btn3d wide ' + (ok ? 'good' : 'bad'), 'data-primary': true, onclick: () => { G.sfx.tap(); nextProblem(); } }, 'Continue');
       const panel = h('div', { class: 'fb' },
@@ -469,6 +484,7 @@
           h('button', { class: 'btn3d wide', onclick: () => sheet.remove() }, 'Keep learning'),
           h('button', { class: 'btn3d wide ghost danger', onclick: () => go('home', { pid: p.id, track: tr.id }) }, 'End lesson')));
       screen.appendChild(sheet);
+      V.line('quit', null, { priority: 2, pitch: 1.15 });
     }
     function finish() {
       const secs = Math.round((Date.now() - L.started) / 1000);
@@ -513,6 +529,9 @@
       foot.replaceChildren(h('div', { class: 'foot-in' }, cont));
       G.restartAnim(card, 'slide-in');
       G.sfx.complete(); G.buzz([20, 40, 20, 40, 60]);
+      V.line(perfect ? 'flawless' : done ? 'victory' : 'effort', { name: p.name }, { priority: 2, delay: 650, pitch: 1.28 });
+      if (crownsNow > startCrowns) V.line(crownsNow === 3 ? 'mastered' : 'crown', { n: crownsNow }, { delay: 2600 });
+      else if (goalNow && !goalBefore) V.line('goal', null, { delay: 2600 });
       if (done) { G.confetti(); setTimeout(() => G.confetti({ count: 90, x: innerWidth * 0.2 }), 350); setTimeout(() => G.confetti({ count: 90, x: innerWidth * 0.8 }), 600); }
       G.countUp(xpEl, L.xp, 900);
       if (trophies) setTimeout(() => { G.countUp(trophyEl, trophies, 700, (v) => '+' + v); G.sfx.trophy(); }, 500);
@@ -533,7 +552,7 @@
           h('p', { class: 'muted' }, streakNow === 1 ? 'Day one! Practise tomorrow to keep the flame going.' : 'You’re on fire! Come back tomorrow to keep it going.'),
           week));
         G.restartAnim(card, 'slide-in');
-        setTimeout(() => { num.textContent = String(streakNow); G.restartAnim(num, 'bump'); G.sfx.streak(); G.buzz([30, 30, 60]); }, 650);
+        setTimeout(() => { num.textContent = String(streakNow); G.restartAnim(num, 'bump'); G.sfx.streak(); G.buzz([30, 30, 60]); V.line(streakNow === 1 ? 'streakFirst' : 'streak', { n: streakNow }, { priority: 2, delay: 350, pitch: 1.28 }); }, 650);
         const c2 = h('button', { class: 'btn3d wide orange', 'data-primary': true, onclick: () => go('home', { pid: p.id, track: tr.id }) }, 'Continue');
         foot.replaceChildren(h('div', { class: 'foot-in' }, c2));
         setTimeout(() => c2.focus(), 100);
@@ -610,7 +629,7 @@
           if (claimed.includes(m.at)) return;
           claimed.push(m.at); grant(p, m.reward);
           btn.disabled = true; btn.classList.remove('ready'); btn.append(h('span', { class: 'road-check' }, '✓'));
-          G.sfx.chest(); G.buzz(20); R.shakeScreen();
+          G.sfx.chest(); G.buzz(20); R.shakeScreen(); V.line('unlock', null, { priority: 2 });
           const r = btn.getBoundingClientRect(); G.confetti({ count: 60, x: r.left + r.width / 2, y: r.top });
           if (m.reward.type === 'gems') R.flyTo(btn, '.stat-pill.gems', G.gem(22));
           G.floatText(btn, R.describe(m.reward).title, 'gem');
@@ -650,6 +669,7 @@
         h('button', { class: 'btn3d wide yellow', onclick: () => scrim.remove() }, 'Let’s go!')));
     document.body.appendChild(scrim);
     G.sfx.levelup(); R.shakeScreen('big'); G.buzz([40, 40, 80]);
+    V.line('arena', { arena: a.name }, { priority: 2, delay: 900, pitch: 1.3 });
     G.confetti(); setTimeout(() => G.confetti({ count: 100, x: innerWidth * 0.15 }), 300); setTimeout(() => G.confetti({ count: 100, x: innerWidth * 0.85 }), 550);
   }
 
@@ -684,6 +704,7 @@
           label.textContent = c.name; label.style.setProperty('--c', c.color); G.restartAnim(label, 'bump');
           G.sfx.upgrade(rarity); R.shakeScreen(rarity >= 3 ? 'big' : 'small');
           R.callout(c.name.toUpperCase() + '!', c.color);
+          V.line('rarity', { key: rarity }, { priority: 2, delay: 250, pitch: rarity >= 3 ? 1.35 : 1.25, rate: 1.1 });
           const r = box.getBoundingClientRect(); G.confetti({ count: 30 + rarity * 20, x: r.left + r.width / 2, y: r.top + r.height / 2 });
         }
         if (taps === TAPS) hint.textContent = 'Tap to open!';
@@ -693,6 +714,8 @@
       const rew = R.rollDrop(rarity, invOf(p.id));
       grant(p, rew); db.drops[p.id] = left - 1; save();
       G.sfx.open(); R.shakeScreen('big'); G.buzz([30, 30, 90]);
+      if (rew.type === 'gems') V.line('gems', { n: rew.n }, { priority: 2, delay: 800 });
+      else V.line('reward', { thing: R.describe(rew).title.replace(/ pin$/, ' pin').replace(/^\S+ pin$/, 'a new pin') }, { priority: 2, delay: 800 });
       G.confetti({ count: 80 + rarity * 30 });
       const d = R.describe(rew);
       const icon = h('div', { class: 'reveal-icon' }, rewardIcon(rew, 130));
