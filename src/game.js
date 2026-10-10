@@ -27,6 +27,7 @@
 
   // ---------- Sound (synthesised with Web Audio; no files) ----------
   // A small mixing desk: everything goes through a compressor (loud but no clipping) with a reverb send.
+  let fxVol = 0.6, ducked = false; const DUCK = 0.25; // effects volume (0..1) and how far effects drop while the mascot talks
   let actx = null, muted = false, master = null, verb = null, noiseBuf = null;
   function ctx() {
     if (muted) return null;
@@ -36,7 +37,7 @@
         actx = new AC();
         const comp = actx.createDynamicsCompressor();
         comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.2;
-        master = actx.createGain(); master.gain.value = 0.9;
+        master = actx.createGain(); master.gain.value = fxVol * (ducked ? DUCK : 1);
         master.connect(comp).connect(actx.destination);
         // short bright room reverb from a generated impulse
         const len = Math.floor(actx.sampleRate * 1.1), ir = actx.createBuffer(2, len, actx.sampleRate);
@@ -134,6 +135,9 @@
     }
   };
   function setMuted(m) { muted = !!m; }
+  function applyGain() { if (master && actx) master.gain.setTargetAtTime(fxVol * (ducked ? DUCK : 1), actx.currentTime, 0.05); }
+  function setFxVolume(v) { fxVol = Math.max(0, Math.min(1, v)); applyGain(); }
+  function duck(on) { ducked = !!on; applyGain(); }
   function buzz(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* not allowed here */ } }
 
   // ---------- Mascot: "Pip", a cheerful number block ----------
@@ -243,5 +247,5 @@
       svg('rect', { x: 28, y: 26, width: 8, height: 12, rx: 2, fill: '#f5c542', stroke: '#a35a12', 'stroke-width': 1.5 }));
   }
 
-  window.MathQuestGame = { XP, DAILY_XP_GOAL, LESSON_LEN, crownsFor, questsFor, sfx, setMuted, buzz, mascot, confetti, floatText, countUp, restartAnim, flame, gem, crownIcon, chest };
+  window.MathQuestGame = { XP, DAILY_XP_GOAL, LESSON_LEN, crownsFor, questsFor, sfx, setMuted, setFxVolume, duck, buzz, mascot, confetti, floatText, countUp, restartAnim, flame, gem, crownIcon, chest };
 })();

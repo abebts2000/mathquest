@@ -28,7 +28,7 @@
   // priority 2: big moments (interrupts whatever is playing)
   function say(text, opts = {}) {
     if ((!enabled && !opts.force) || !supported || !text) return;
-    const { priority = 1, delay = 0, pitch = 1.22, rate = 1.06 } = opts;
+    const { priority = 1, delay = 0, pitch = 1.1, rate = 1.04 } = opts;
     setTimeout(() => {
       try {
         if (priority < 2 && synth.speaking && Date.now() - lastAt < 2500) return;
@@ -36,9 +36,11 @@
         const u = new SpeechSynthesisUtterance(text);
         if (!voice) voice = pickVoice();
         u.lang = 'en-US'; if (voice) u.voice = voice;
-        u.pitch = pitch; u.rate = rate; u.volume = 1;
-        if (opts.onstart) u.onstart = opts.onstart;
-        if (opts.onend) { u.onend = opts.onend; u.onerror = opts.onend; }
+        u.pitch = Math.min(pitch, 1.18); u.rate = rate; u.volume = 1;
+        // Duck the sound effects while the voice talks so it is easy to hear; full volume always.
+        const G = window.MathQuestGame;
+        u.onstart = () => { if (G && G.duck) G.duck(true); if (opts.onstart) opts.onstart(); };
+        u.onend = u.onerror = () => { if (G && G.duck && !synth.pending) G.duck(false); if (opts.onend) opts.onend(); };
         synth.speak(u); lastAt = Date.now();
         if (window.__MQ_TEST__) (window.__MQ_TEST__.said = window.__MQ_TEST__.said || []).push(text);
       } catch (e) { /* speech not available here */ }

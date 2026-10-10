@@ -23,6 +23,7 @@
   const blank = () => ({ profiles: [], progress: {}, days: {}, parentPin: '', gems: {}, freezes: {}, frozen: {}, muted: false, trophies: {}, drops: {}, inv: {}, road: {}, arenaSeen: {} });
   let db = load();
   G.setMuted(db.muted);
+  G.setFxVolume(db.fxVol == null ? 0.6 : db.fxVol);
   V.setEnabled(!db.muted && !db.voiceOff);
   if (V.choose) V.choose(db.voiceName);
   function load() {
@@ -456,7 +457,7 @@
       if (db.muted || !V.supported) { if (withChoices) toast(db.muted ? 'Sound is off. Tap the speaker at the top to turn it on.' : 'This device can’t read aloud.'); return; }
       let text = V.speakMath(pr.prompt);
       if (withChoices && pr.input.type === 'choice') text += ' ' + pr.input.options.map((o, i) => `${'ABCDE'[i]}: ${/<svg/i.test(o) ? 'picture ' + (i + 1) : V.speakMath(o)}`).join('. ') + '.';
-      V.say(text, { priority: 2, pitch: 1.12, rate: 0.95, force: true, onstart: () => btn.classList.add('talking'), onend: () => btn.classList.remove('talking') });
+      V.say(text, { priority: 2, pitch: 1.02, rate: 0.95, force: true, onstart: () => btn.classList.add('talking'), onend: () => btn.classList.remove('talking') });
     }
     // Use the problem's hint, or else the first step of its worked solution (when there are later steps).
     const hintFor = (pr) => pr.hint || (Array.isArray(pr.explanation) && pr.explanation.length >= 2 ? pr.explanation[0] : null);
@@ -1040,6 +1041,10 @@
       card.replaceChildren(h('h3', {}, 'Cheering voice'),
         h('p', { class: 'muted', style: { fontSize: '.9rem' } }, names.length ? `American English voices on this device: ${names.length}. Pick the one the kids like best.` : 'Uses this device’s American English voice.'),
         h('div', { class: 'row' }, names.length ? h('label', { class: 'field', style: { flex: 1, minWidth: '200px' } }, sel) : null, preview),
+        h('label', { class: 'field' }, h('span', { style: { fontWeight: 700 } }, 'Sound effects volume (lower = voice stands out more)'),
+          h('input', { type: 'range', id: 'fx-volume', min: 0, max: 100, step: 5, value: Math.round((db.fxVol == null ? 0.6 : db.fxVol) * 100), style: { accentColor: 'var(--accent)' },
+            onchange: (e) => { db.fxVol = Number(e.target.value) / 100; save(); G.setFxVolume(db.fxVol); G.sfx.correct(); setTimeout(() => V.say('This is how loud I am!', { priority: 2, force: true }), 500); } })),
+        h('p', { class: 'muted', style: { fontSize: '.85rem' } }, 'The voice always plays at full volume. Effects get quieter while the mascot talks. If it’s still hard to hear, turn up the device volume and, on iPhone or iPad, flip off the silent switch.'),
         h('label', { class: 'row', style: { gap: '8px', fontWeight: 700 } }, h('input', { type: 'checkbox', id: 'read-aloud', checked: db.readAloud !== false, onchange: (e) => { db.readAloud = e.target.checked; save(); } }), 'Mascot reads each question out loud'));
     };
     paint();
