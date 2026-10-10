@@ -37,6 +37,7 @@ const PER_SKILL = Number(process.env.PER_SKILL || 6);
     const nSkills = await page.$$eval('.node', (els) => els.length);
     for (let si = 0; si < nSkills; si++) {
       for (let les = 0; les < LESSONS; les++) {
+        if (await page.$('.levelup-scrim')) { await page.waitForTimeout(900); await shot(`levelup-${track}-${si}`, false); await page.click('.levelup-scrim button', { force: true }); }
         await page.locator('.node').nth(si).click();
         if (si === 0 && les === 0) await shot(`03b-pop-${track}`);
         await page.click('.pop-go');
@@ -66,7 +67,31 @@ const PER_SKILL = Number(process.env.PER_SKILL || 6);
         results.push(`${track}#${si}.${les} q=${q} types=${JSON.stringify(types)}`);
       }
     }
+    if (await page.$('.levelup-scrim')) { await page.waitForTimeout(900); await shot(`levelup-${track}-end`, false); await page.click('.levelup-scrim button', { force: true }); }
     await shot(`04-home-after-${track}`);
+    await shot(`04a-home-top-${track}`, false);
+    // open reward drops (up to 3)
+    for (let k = 0; k < 3 && (await page.$('.drop-btn')); k++) {
+      await page.click('.drop-btn', { force: true });
+      await page.waitForSelector('.drop-box-btn');
+      for (let t = 0; t < 4; t++) { await page.click('.drop-box-btn', { force: true }); await page.waitForTimeout(260); if (t === 1 && k === 0) await shot(`drop-tap-${track}`, false); }
+      await page.click('.drop-box-btn', { force: true });
+      await page.waitForSelector('.reveal');
+      await page.waitForTimeout(800);
+      if (k === 0) await shot(`drop-reveal-${track}`, false);
+      results.push(`${track} drop ${k}: ${await page.textContent('.reveal .rarity-label')} → ${await page.textContent('.reveal h2')}`);
+      await page.click('.reveal .btn3d');
+    }
+    if (!(await page.$('.hero-card'))) await page.click('.brand');
+    await page.click('.pip-btn');
+    await page.waitForSelector('.collect-grid');
+    const firstOwned = await page.$('.collect-tile:not(.locked):not(.on)');
+    if (firstOwned) await firstOwned.click();
+    await page.click('.collect-tabs button:has-text("Hats")');
+    const hat = await page.$('.collect-tile:not(.locked):not(.on)');
+    if (hat) await hat.click();
+    await shot(`07-collection-${track}`);
+    await page.click('text=‹ Back');
     // claim any open quest chests
     for (let k = 0; k < 4; k++) { const b = await page.$('.chest-btn.wiggle'); if (!b) break; await b.click(); if (k === 0) { await page.waitForTimeout(350); await shot(`04c-chest-${track}`, false); } await page.waitForTimeout(1300); }
     await shot(`04b-home-claimed-${track}`);

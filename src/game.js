@@ -56,14 +56,20 @@
     combo() { [880, 1109, 1319, 1760].forEach((f, i) => tone(f, i * 0.06, 0.14, 'square', 0.05)); },
     complete() { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.11, 0.3, 'triangle', 0.16)); tone(1568, 0.48, 0.5, 'sine', 0.12); },
     streak() { [392, 523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.08, 0.25, 'sawtooth', 0.05)); },
-    chest() { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, i * 0.07, 0.2, 'sine', 0.12)); }
+    chest() { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, i * 0.07, 0.2, 'sine', 0.12)); },
+    thump() { tone(140, 0, 0.18, 'sine', 0.3, 70); tone(320, 0, 0.06, 'square', 0.04); },
+    upgrade(step = 0) { const b = 523 * Math.pow(2, step / 4); [b, b * 1.25, b * 1.5, b * 2].forEach((f, i) => tone(f, i * 0.05, 0.18, 'square', 0.06)); tone(b * 2, 0.2, 0.4, 'triangle', 0.12); },
+    open() { tone(90, 0, 0.35, 'sawtooth', 0.12, 40); [784, 988, 1175, 1568, 1976].forEach((f, i) => tone(f, 0.12 + i * 0.06, 0.3, 'triangle', 0.12)); },
+    trophy() { [1319, 1568].forEach((f, i) => tone(f, i * 0.08, 0.25, 'sine', 0.15)); },
+    levelup() { [392, 494, 587, 784, 988, 1175, 1568].forEach((f, i) => tone(f, i * 0.09, 0.35, 'square', 0.06)); tone(196, 0, 0.9, 'sawtooth', 0.05); },
+    callout() { tone(220, 0, 0.12, 'square', 0.08, 440); tone(660, 0.08, 0.2, 'triangle', 0.1); }
   };
   function setMuted(m) { muted = !!m; }
   function buzz(pattern) { try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* not allowed here */ } }
 
   // ---------- Mascot: "Pip", a cheerful number block ----------
   // states: idle | happy | sad | cheer | think
-  function mascot(state = 'idle', size = 96, color = 'var(--accent)') {
+  function mascot(state = 'idle', size = 96, color = 'var(--accent)', hatId) {
     const s = svg('svg', { viewBox: '0 0 120 120', width: size, height: size, class: 'pip pip-' + state, 'aria-hidden': 'true' });
     const body = svg('g', { class: 'pip-body' });
     body.append(
@@ -97,6 +103,9 @@
     }
     face.append(svg('circle', { cx: 40, cy: 66, r: 4, fill: '#fff', opacity: '.25' }), svg('circle', { cx: 80, cy: 66, r: 4, fill: '#fff', opacity: '.25' }));
     body.append(armL, armR, face);
+    const R = window.MathQuestRewards;
+    const acc = hatId && R ? R.hat(hatId) : null;
+    if (acc) body.append(acc);
     s.append(defs, body);
     return s;
   }

@@ -4,6 +4,8 @@
   const MQ = window.MathQuest;
   const G = window.MathQuestGame;
   const Cloud = window.MathQuestCloud || { enabled: false };
+  const R = window.MathQuestRewards;
+  const A = window.MathQuestArena;
   const { h, svg, tex } = window.MathQuestDOM;
   const { makeWidget, answerText } = window.MathQuestWidgets;
   const app = document.getElementById('app');
@@ -13,7 +15,7 @@
   const FREEZE_COST = 50, MAX_FREEZES = 2, QUEST_GEMS = 15, PERFECT_GEMS = 5;
 
   // ---------- Storage ----------
-  const blank = () => ({ profiles: [], progress: {}, days: {}, parentPin: '', gems: {}, freezes: {}, frozen: {}, muted: false });
+  const blank = () => ({ profiles: [], progress: {}, days: {}, parentPin: '', gems: {}, freezes: {}, frozen: {}, muted: false, trophies: {}, drops: {}, inv: {}, road: {}, arenaSeen: {} });
   let db = load();
   G.setMuted(db.muted);
   function load() {
@@ -83,10 +85,13 @@
           h('span', { class: 'brand-mark', 'aria-hidden': 'true' }, '÷'), h('span', { class: 'brand-word' }, 'MathQuest')),
         h('div', { class: 'spacer' }),
         p ? statPill(G.flame(streakDays(p.id) > 0, 22), streakDays(p.id), 'day streak', 'streak') : null,
+        p ? statPill(R.trophyIcon(20), trophiesOf(p.id), 'trophies', 'trophies') : null,
         p ? statPill(G.gem(20), db.gems[p.id] || 0, 'gems', 'gems') : null,
+        p && db.drops[p.id] ? h('button', { class: 'drop-btn', 'aria-label': `Open ${db.drops[p.id]} reward drop${db.drops[p.id] > 1 ? 's' : ''}`, onclick: () => go('drop', { pid: p.id }) }, R.dropBox(1, 30), h('span', { class: 'badge tnum' }, String(db.drops[p.id]))) : null,
         soundToggle(),
         p ? h('button', { class: 'who', onclick: () => go('profiles'), title: 'Switch player', 'aria-label': 'Switch player' }, avatar(p)) : null,
         !p && db.profiles.length ? h('button', { class: 'btn-small', onclick: openParent }, 'Parent view') : null));
+    A.set(p ? tierOf(p.id) : 0, 'home');
     app.replaceChildren(bar, h('main', { class: 'wrap', 'data-track': opts.track || (p && p.track) || 'g3' }, content));
   }
   function avatar(p, big) {
@@ -265,12 +270,12 @@
     path.append(h('div', { class: 'node-wrap', style: { transform: `translateX(${PATH_X[tr.skills.length % PATH_X.length]}px)` } },
       h('div', { class: 'trophy' + (tr.skills.every((s) => prog[s.id] && prog[s.id].mastered) ? ' won' : '') }, '🏆')));
 
-    const mascotColor = { g3: 'var(--t-g3)', g7: 'var(--t-g7)', geo: 'var(--t-geo)' }[tr.id];
     const content = h('div', { class: 'home-grid' },
       h('div', { class: 'home-main stack', style: { gap: '18px' } },
         h('div', { class: 'hero-card' },
-          G.mascot(xpToday >= G.DAILY_XP_GOAL ? 'happy' : 'idle', 84, mascotColor),
-          h('div', { class: 'bubble' }, h('b', {}, `${greeting()}, ${p.name}!`), h('span', {}, nudge))),
+          h('button', { class: 'pip-btn', 'aria-label': 'Open collection', onclick: () => go('collection', { pid: p.id }) }, pip(p, xpToday >= G.DAILY_XP_GOAL ? 'happy' : 'idle', 84), h('span', { class: 'pip-edit' }, '✎')),
+          h('div', { class: 'bubble' }, h('b', {}, `${greeting()}, ${p.name}!`, pinOf(p)), h('span', {}, nudge))),
+        trophyRoad(p),
         h('div', { class: 'goal-card' },
           h('div', { class: 'row', style: { justifyContent: 'space-between' } }, h('span', { class: 'eyebrow' }, 'Daily goal'), h('span', { class: 'tnum goal-num' }, `${Math.min(xpToday, G.DAILY_XP_GOAL)} / ${G.DAILY_XP_GOAL} XP`)),
           h('div', { class: 'xpbar' }, h('i', { style: { width: goalPct + '%' } }))),
@@ -281,6 +286,8 @@
         path),
       h('aside', { class: 'home-side stack', style: { gap: '16px' } }, questsCard(p), Cloud.enabled ? friendsCard(p) : null, freezeCard(p), leagueCard(p)));
     shell(content, { profile: p, track: tr.id });
+    const tierNow = tierOf(p.id);
+    if (tierNow > (db.arenaSeen[p.id] || 0)) { db.arenaSeen[p.id] = tierNow; save(); setTimeout(() => arenaUnlocked(p, tierNow), 450); }
     if (usedFreeze) setTimeout(() => toast(`A streak freeze saved your streak! (${usedFreeze} day${usedFreeze > 1 ? 's' : ''} covered)`), 400);
   }
   function progressArc(score) {
@@ -333,7 +340,7 @@
     const medal = ['🥇', '🥈', '🥉'];
     return h('section', { class: 'side-card' }, h('h3', {}, 'Family league'), h('span', { class: 'muted', style: { fontSize: '.85rem' } }, 'XP earned in the last 7 days'),
       h('ol', { class: 'league' }, ...rows.map((r, i) => h('li', { class: r.k.id === p.id ? 'me' : '' },
-        h('span', { class: 'rank' }, r.xp > 0 && i < 3 ? medal[i] : String(i + 1)), avatar(r.k), h('span', { class: 'lname' }, r.k.name), h('b', { class: 'tnum' }, r.xp + ' XP')))));
+        h('span', { class: 'rank' }, r.xp > 0 && i < 3 ? medal[i] : String(i + 1)), avatar(r.k), h('span', { class: 'lname' }, r.k.name, pinOf(r.k)), h('b', { class: 'tnum' }, r.xp + ' XP')))));
   }
 
   // ---------- Lesson ----------
@@ -361,6 +368,7 @@
     const foot = h('footer', { class: 'lesson-foot' });
     const screen = h('div', { class: 'lesson', 'data-track': tr.id }, top, h('div', { class: 'lesson-body' }, card), foot);
     app.replaceChildren(screen);
+    A.set(tierOf(p.id), 'lesson');
 
     const onKey = (e) => {
       if (e.key !== 'Enter' || (e.target.tagName === 'BUTTON' && !e.target.hasAttribute('data-primary'))) return;
@@ -395,7 +403,7 @@
       const hintBox = h('div');
       const tag = level === 3 ? 'Challenge' : level === 2 ? 'Level 2' : 'Level 1';
       card.replaceChildren(
-        h('div', { class: 'q-head' }, G.mascot('think', 52, 'var(--t)'), h('div', { class: 'q-tag' }, h('span', { class: 'chip' }, tag), h('span', { class: 'muted' }, sk.title))),
+        h('div', { class: 'q-head' }, pip(p, 'think', 52), h('div', { class: 'q-tag' }, h('span', { class: 'chip' }, tag), h('span', { class: 'muted' }, sk.title))),
         tex(h('div', { class: 'prompt', html: pr.prompt })),
         pr.figure ? tex(h('div', { class: 'figure', html: pr.figure })) : '',
         h('div', { class: 'answer-area' }, widget.el), hintBox);
@@ -432,7 +440,9 @@
       if (ok) {
         G.sfx.correct(L.combo); G.buzz(12);
         G.floatText(top.querySelector('.lbar'), '+' + gained + ' XP', 'xp');
-        if (comboHit) setTimeout(() => { G.sfx.combo(); comboBurst(L.combo); }, 250);
+        const CALL = { 2: ['DOUBLE!', '#2f9bff'], 3: ['TRIPLE!', '#b05cff'], 4: ['ON FIRE!', '#ff8a1f'] };
+        if (comboHit) setTimeout(() => { G.sfx.combo(); R.callout('UNSTOPPABLE!', '#ff3d6e', `${L.combo} in a row · +${G.XP.comboBonus} bonus XP`); R.shakeScreen('big'); }, 200);
+        else if (CALL[L.combo]) setTimeout(() => { G.sfx.callout(); R.callout(CALL[L.combo][0], CALL[L.combo][1]); R.shakeScreen(); }, 150);
       } else {
         G.sfx.wrong(); G.buzz([30, 50, 30]); G.restartAnim(card, 'shake');
       }
@@ -449,15 +459,11 @@
       foot.replaceChildren(h('div', { class: 'foot-in col' }, panel, cont));
       setTimeout(() => cont.focus(), 60);
     }
-    function comboBurst(n) {
-      const b = h('div', { class: 'combo-burst', role: 'status' }, G.flame(true, 44), h('b', {}, `${n} in a row!`), h('span', {}, `+${G.XP.comboBonus} bonus XP`));
-      screen.appendChild(b); setTimeout(() => b.remove(), 1500);
-    }
     function askQuit() {
       if (screen.querySelector('.sheet')) return;
       const sheet = h('div', { class: 'sheet-scrim' },
         h('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Quit lesson?' },
-          G.mascot('sad', 72, 'var(--t)'),
+          pip(p, 'sad', 72),
           h('h2', {}, 'Wait, don’t go!'),
           h('p', { class: 'muted' }, L.correct ? `You’re ${G.LESSON_LEN - L.correct} away from finishing. Quit now and you’ll miss the lesson bonus.` : 'You’ll lose this lesson if you quit now.'),
           h('button', { class: 'btn3d wide', onclick: () => sheet.remove() }, 'Keep learning'),
@@ -474,6 +480,9 @@
       if (done) { bonus += G.XP.finish; d.lessons = (d.lessons || 0) + 1; sp.lessons = (sp.lessons || 0) + 1; }
       if (perfect) { bonus += G.XP.perfect; d.perfect = (d.perfect || 0) + 1; db.gems[p.id] = (db.gems[p.id] || 0) + PERFECT_GEMS; }
       L.xp += bonus; d.xp = (d.xp || 0) + bonus;
+      const trophies = R.trophiesFor(L.correct, L.wrong, done);
+      db.trophies[p.id] = trophiesOf(p.id) + trophies;
+      if (done) db.drops[p.id] = (db.drops[p.id] || 0) + 1;
       save();
       const goalNow = d.xp >= G.DAILY_XP_GOAL;
       cloudSync(p);
@@ -489,11 +498,14 @@
       extras.append(h('div', { class: 'res-badge plain' }, `SmartScore ${startScore} → `, h('b', {}, String(sp.score))));
       if (perfect) extras.append(h('div', { class: 'res-badge' }, G.gem(22), `Perfect lesson! +${PERFECT_GEMS} gems`));
       if (goalNow && !goalBefore) extras.append(h('div', { class: 'res-badge' }, '🎯', 'Daily goal complete!'));
-      const title = done ? (perfect ? 'Perfect lesson!' : 'Lesson complete!') : 'Nice effort!';
+      const title = done ? (perfect ? 'FLAWLESS VICTORY!' : 'VICTORY!') : 'Nice effort!';
+      const trophyEl = h('b', { class: 'tnum' }, '+0');
+      if (trophies) extras.prepend(h('div', { class: 'trophy-gain' }, R.trophyIcon(40), trophyEl));
+      if (done) extras.append(h('div', { class: 'res-badge drop-earned' }, R.dropBox(2, 30), 'Reward drop earned!'));
       const cont = h('button', { class: 'btn3d wide', 'data-primary': true, onclick: () => (extended ? streakScreen() : go('home', { pid: p.id, track: tr.id })) }, 'Continue');
       card.replaceChildren(h('div', { class: 'results' },
-        h('div', { class: 'res-mascot' }, G.mascot('cheer', 140, 'var(--t)')),
-        h('h1', {}, title),
+        h('div', { class: 'res-mascot' }, h('div', { class: 'res-rays' }, R.rays('#ffc928', 340)), pip(p, 'cheer', 140)),
+        h('h1', { class: 'victory' + (done ? '' : ' soft') }, title),
         h('div', { class: 'res-tiles' }, tile('xp', 'Total XP', xpEl), tile('acc', acc >= 90 ? 'Amazing' : acc >= 70 ? 'Good' : 'Accuracy', accEl), tile('time', 'Time', timeEl)),
         extras));
       top.hidden = true;
@@ -502,7 +514,9 @@
       G.restartAnim(card, 'slide-in');
       G.sfx.complete(); G.buzz([20, 40, 20, 40, 60]);
       if (done) { G.confetti(); setTimeout(() => G.confetti({ count: 90, x: innerWidth * 0.2 }), 350); setTimeout(() => G.confetti({ count: 90, x: innerWidth * 0.8 }), 600); }
-      G.countUp(xpEl, L.xp, 900); G.countUp(accEl, acc, 900, (v) => v + '%');
+      G.countUp(xpEl, L.xp, 900);
+      if (trophies) setTimeout(() => { G.countUp(trophyEl, trophies, 700, (v) => '+' + v); G.sfx.trophy(); }, 500);
+      if (done) R.shakeScreen(); G.countUp(accEl, acc, 900, (v) => v + '%');
       G.countUp(timeEl, secs, 900, (v) => Math.floor(v / 60) + ':' + String(v % 60).padStart(2, '0'));
       setTimeout(() => cont.focus(), 100);
 
@@ -527,6 +541,210 @@
     }
     paintTop();
     nextProblem();
+  }
+
+  // ---------- Rewards, collection & arenas ----------
+  function invOf(pid) {
+    const i = (db.inv[pid] = db.inv[pid] || {});
+    i.skins = i.skins || ['classic']; i.hats = i.hats || ['none']; i.pins = i.pins || [];
+    i.skin = i.skin || 'classic'; i.hat = i.hat || 'none';
+    return i;
+  }
+  function look(p) {
+    const i = invOf(p.id); const s = R.SKINS.find((x) => x.id === i.skin);
+    return { color: (s && s.color) || 'var(--t)', hat: i.hat && i.hat !== 'none' ? i.hat : null };
+  }
+  const pip = (p, state, size) => { const l = look(p); return G.mascot(state, size, l.color, l.hat); };
+  const trophiesOf = (pid) => db.trophies[pid] || 0;
+  const tierOf = (pid) => A.tierFor(trophiesOf(pid));
+  function pinOf(p) {
+    const i = invOf(p.id); const pin = R.PINS.find((x) => x.id === i.pin);
+    return pin ? h('span', { class: 'pin-badge', 'aria-hidden': 'true' }, pin.e) : null;
+  }
+  function grant(p, r) {
+    const i = invOf(p.id);
+    switch (r.type) {
+      case 'gems': db.gems[p.id] = (db.gems[p.id] || 0) + r.n; break;
+      case 'drop': db.drops[p.id] = (db.drops[p.id] || 0) + r.n; break;
+      case 'skin': if (!i.skins.includes(r.id)) i.skins.push(r.id); break;
+      case 'hat': if (!i.hats.includes(r.id)) i.hats.push(r.id); break;
+      case 'pin': if (!i.pins.includes(r.id)) i.pins.push(r.id); break;
+      case 'freeze':
+        if ((db.freezes[p.id] || 0) < MAX_FREEZES) db.freezes[p.id] = (db.freezes[p.id] || 0) + 1;
+        else db.gems[p.id] = (db.gems[p.id] || 0) + FREEZE_COST;
+        break;
+    }
+    save();
+  }
+  function rewardIcon(r, size = 56) {
+    switch (r.type) {
+      case 'gems': return G.gem(size);
+      case 'drop': return R.dropBox(Math.min(4, (r.n || 1) - 1), size);
+      case 'skin': { const s = R.SKINS.find((x) => x.id === r.id); return G.mascot('happy', size, (s && s.color) || 'var(--t)'); }
+      case 'hat': return G.mascot('happy', size, 'var(--t)', r.id);
+      case 'pin': { const s = R.PINS.find((x) => x.id === r.id); return h('span', { class: 'emoji-icon', style: { fontSize: size * 0.72 + 'px' } }, s ? s.e : '?'); }
+      case 'freeze': return h('span', { class: 'emoji-icon freeze', style: { fontSize: size * 0.6 + 'px' } }, '❄');
+      default: return h('span', {}, '?');
+    }
+  }
+  const rarityOf = (r) => {
+    const list = { skin: R.SKINS, hat: R.HATS, pin: R.PINS }[r.type];
+    const item = list && list.find((x) => x.id === r.id);
+    return item ? item.rarity : r.type === 'drop' ? 2 : r.type === 'freeze' ? 3 : 1;
+  };
+
+  function trophyRoad(p) {
+    const tr = trophiesOf(p.id);
+    const claimed = (db.road[p.id] = db.road[p.id] || []);
+    const tier = A.tierFor(tr), arena = A.ARENAS[tier], next = A.ARENAS[tier + 1];
+    const track = h('div', { class: 'road-track' });
+    let focus = null;
+    R.ROAD.forEach((m, idx) => {
+      const reached = tr >= m.at, done = claimed.includes(m.at), prevAt = idx ? R.ROAD[idx - 1].at : 0;
+      const fill = reached ? 100 : tr <= prevAt ? 0 : Math.round(((tr - prevAt) / (m.at - prevAt)) * 100);
+      const btn = h('button', {
+        class: 'road-reward' + (reached && !done ? ' ready' : ''), style: { '--c': R.RARITY[rarityOf(m.reward)].color },
+        'aria-label': `${m.at} trophies: ${R.describe(m.reward).title}${done ? ' (claimed)' : reached ? ' (tap to claim)' : ''}`,
+        disabled: !reached || done,
+        onclick: () => {
+          if (claimed.includes(m.at)) return;
+          claimed.push(m.at); grant(p, m.reward);
+          btn.disabled = true; btn.classList.remove('ready'); btn.append(h('span', { class: 'road-check' }, '✓'));
+          G.sfx.chest(); G.buzz(20); R.shakeScreen();
+          const r = btn.getBoundingClientRect(); G.confetti({ count: 60, x: r.left + r.width / 2, y: r.top });
+          if (m.reward.type === 'gems') R.flyTo(btn, '.stat-pill.gems', G.gem(22));
+          G.floatText(btn, R.describe(m.reward).title, 'gem');
+          setTimeout(() => go('home', { pid: p.id, track: state.track }), 1200);
+        }
+      }, rewardIcon(m.reward, 46), done ? h('span', { class: 'road-check' }, '✓') : null);
+      const step = h('div', { class: 'road-step' + (reached ? ' reached' : '') },
+        h('div', { class: 'road-line' }, h('i', { style: { width: fill + '%' } })),
+        h('span', { class: 'road-at tnum' }, R.trophyIcon(14), String(m.at)), btn,
+        h('span', { class: 'road-label' }, R.describe(m.reward).title));
+      if (!focus && ((reached && !done) || !reached)) focus = step;
+      track.append(step);
+    });
+    const scroller = h('div', { class: 'road-scroll' }, track);
+    setTimeout(() => { if (focus) scroller.scrollLeft = Math.max(0, focus.offsetLeft - scroller.clientWidth / 2 + focus.offsetWidth / 2); }, 0);
+    const pct = next ? Math.round(((tr - arena.at) / (next.at - arena.at)) * 100) : 100;
+    return h('section', { class: 'road-card' },
+      h('div', { class: 'road-head' },
+        h('div', { class: 'stack', style: { gap: '2px', minWidth: 0 } },
+          h('span', { class: 'arena-chip' }, `Arena ${tier + 1}`), h('h3', { class: 'arena-name' }, arena.name)),
+        h('div', { class: 'trophy-total tnum' }, R.trophyIcon(30), h('b', {}, String(tr)))),
+      next ? h('div', { class: 'arena-next' }, h('div', { class: 'xpbar arena-bar' }, h('i', { style: { width: pct + '%' } })),
+        h('span', { class: 'muted tnum' }, `${next.at - tr} trophies to ${next.name}`)) : h('p', { class: 'muted' }, 'Top arena reached!'),
+      scroller);
+  }
+
+  function arenaUnlocked(p, tier) {
+    const a = A.ARENAS[tier];
+    const sky = h('div', { class: 'arena-swatch', style: { background: `linear-gradient(160deg, ${a.sky[0]}, ${a.sky[1]})` } }, ...a.glyphs.split('').map((g) => h('span', {}, g)));
+    const scrim = h('div', { class: 'levelup-scrim' },
+      h('div', { class: 'levelup' },
+        h('div', { class: 'levelup-rays' }, R.rays('#ffc928', 420)),
+        h('span', { class: 'callout-title' }, 'NEW ARENA!'),
+        sky,
+        h('h2', { class: 'outlined' }, a.name),
+        h('p', {}, `Arena ${tier + 1} unlocked at ${a.at} trophies. The background just levelled up!`),
+        h('button', { class: 'btn3d wide yellow', onclick: () => scrim.remove() }, 'Let’s go!')));
+    document.body.appendChild(scrim);
+    G.sfx.levelup(); R.shakeScreen('big'); G.buzz([40, 40, 80]);
+    G.confetti(); setTimeout(() => G.confetti({ count: 100, x: innerWidth * 0.15 }), 300); setTimeout(() => G.confetti({ count: 100, x: innerWidth * 0.85 }), 550);
+  }
+
+  // ---------- Reward drop opening ----------
+  function viewDrop() {
+    const p = me(); if (!p) return go('profiles');
+    const left = db.drops[p.id] || 0;
+    if (!left) return go('home', { pid: p.id });
+    let rarity = 0, taps = 0, opened = false;
+    const TAPS = 4;
+    const raysBox = h('div', { class: 'drop-rays' }, R.rays(R.RARITY[0].color, 380));
+    const box = h('button', { class: 'drop-box-btn', 'aria-label': 'Tap the drop' }, R.dropBox(0, 180));
+    const label = h('div', { class: 'rarity-label', style: { '--c': R.RARITY[0].color } }, R.RARITY[0].name);
+    const hint = h('p', { class: 'drop-hint' }, 'Tap the drop! Each tap might upgrade it.');
+    const pips = h('div', { class: 'drop-pips' }, ...Array.from({ length: TAPS }, () => h('i')));
+    const stage = h('div', { class: 'drop-stage', style: { '--c': R.RARITY[0].color } }, raysBox, label, box, pips, hint);
+    const content = h('div', { class: 'stack', style: { gap: '12px', alignItems: 'center' } },
+      h('span', { class: 'callout-title small' }, 'REWARD DROP'),
+      h('p', { class: 'muted' }, left > 1 ? `${left} drops waiting` : 'Last drop!'), stage);
+    shell(content, { profile: p });
+    box.addEventListener('click', () => {
+      if (opened) return;
+      if (taps < TAPS) {
+        pips.children[taps].classList.add('on'); taps++;
+        G.sfx.thump(); G.buzz(15); G.restartAnim(box, 'drop-hit');
+        if (rarity < 4 && Math.random() < R.UPGRADE_CHANCE[taps - 1]) {
+          rarity++;
+          const c = R.RARITY[rarity];
+          stage.style.setProperty('--c', c.color);
+          box.replaceChildren(R.dropBox(rarity, 180)); G.restartAnim(box, 'drop-up');
+          raysBox.replaceChildren(R.rays(c.color, 380));
+          label.textContent = c.name; label.style.setProperty('--c', c.color); G.restartAnim(label, 'bump');
+          G.sfx.upgrade(rarity); R.shakeScreen(rarity >= 3 ? 'big' : 'small');
+          R.callout(c.name.toUpperCase() + '!', c.color);
+          const r = box.getBoundingClientRect(); G.confetti({ count: 30 + rarity * 20, x: r.left + r.width / 2, y: r.top + r.height / 2 });
+        }
+        if (taps === TAPS) hint.textContent = 'Tap to open!';
+        return;
+      }
+      opened = true;
+      const rew = R.rollDrop(rarity, invOf(p.id));
+      grant(p, rew); db.drops[p.id] = left - 1; save();
+      G.sfx.open(); R.shakeScreen('big'); G.buzz([30, 30, 90]);
+      G.confetti({ count: 80 + rarity * 30 });
+      const d = R.describe(rew);
+      const icon = h('div', { class: 'reveal-icon' }, rewardIcon(rew, 130));
+      const more = db.drops[p.id] || 0;
+      stage.replaceChildren(raysBox, h('div', { class: 'reveal' },
+        h('div', { class: 'rarity-label', style: { '--c': R.RARITY[rarity].color } }, R.RARITY[rarity].name),
+        icon, h('h2', { class: 'outlined' }, d.title), h('p', { class: 'muted' }, d.sub),
+        h('button', { class: 'btn3d wide yellow', onclick: () => go(more ? 'drop' : 'home', { pid: p.id }) }, more ? `Open next (${more})` : 'Collect'),
+        rew.type === 'skin' || rew.type === 'hat' || rew.type === 'pin' ? h('button', { class: 'btn-small', onclick: () => go('collection', { pid: p.id, tab: rew.type + 's' }) }, 'Try it on') : null));
+      if (rew.type === 'gems') setTimeout(() => R.flyTo(icon, '.stat-pill.gems', G.gem(22), 10), 300);
+      const badge = document.querySelector('.drop-btn .badge'); if (badge) badge.textContent = String(more);
+    });
+  }
+
+  // ---------- Collection: dress up Pip ----------
+  function viewCollection() {
+    const p = me(); if (!p) return go('profiles');
+    const tab = state.tab || 'skins';
+    const i = invOf(p.id);
+    const lists = { skins: R.SKINS, hats: R.HATS, pins: R.PINS };
+    const owned = { skins: i.skins, hats: i.hats, pins: i.pins }[tab];
+    const equipped = { skins: i.skin, hats: i.hat, pins: i.pin }[tab];
+    const total = R.SKINS.length + R.HATS.length + R.PINS.length;
+    const have = i.skins.length + i.hats.length + i.pins.length;
+    const lk = look(p);
+    const icon = (x) => tab === 'skins' ? G.mascot('idle', 64, x.color || 'var(--t)', lk.hat)
+      : tab === 'hats' ? G.mascot('idle', 64, lk.color, x.id === 'none' ? null : x.id)
+      : h('span', { class: 'emoji-icon', style: { fontSize: '40px' } }, x.e);
+    const grid = h('div', { class: 'collect-grid' }, ...lists[tab].map((x) => {
+      const own = owned.includes(x.id), on = equipped === x.id;
+      return h('button', {
+        class: 'collect-tile' + (own ? '' : ' locked') + (on ? ' on' : ''), style: { '--c': R.RARITY[x.rarity].color },
+        disabled: !own, 'aria-pressed': String(on),
+        onclick: () => {
+          if (tab === 'skins') i.skin = x.id; else if (tab === 'hats') i.hat = x.id; else i.pin = on ? null : x.id;
+          save(); G.sfx.upgrade(0); go('collection', { pid: p.id, tab });
+        }
+      }, h('span', { class: 'tile-art' }, icon(x)), h('span', { class: 'tile-name' }, own ? (x.name || '') : '???'),
+      h('span', { class: 'tile-rarity' }, on ? 'Equipped' : R.RARITY[x.rarity].name));
+    }));
+    const content = h('div', { class: 'stack', style: { gap: '16px' } },
+      h('div', { class: 'practice-head' }, h('button', { class: 'btn-small', onclick: () => go('home', { pid: p.id }) }, '‹ Back')),
+      h('div', { class: 'collect-hero' },
+        h('div', { class: 'collect-rays' }, R.rays(R.RARITY[4].color, 260)),
+        pip(p, 'cheer', 150), pinOf(p),
+        h('h1', { class: 'outlined' }, 'Collection'),
+        h('span', { class: 'collect-count tnum' }, `${have} / ${total} collected`)),
+      h('div', { class: 'tabs collect-tabs' }, ...[['skins', 'Skins'], ['hats', 'Hats'], ['pins', 'Pins']].map(([k, label]) =>
+        h('button', { class: 'btn-small' + (k === tab ? ' on' : ''), onclick: () => go('collection', { pid: p.id, tab: k }) }, label))),
+      grid,
+      h('p', { class: 'muted', style: { textAlign: 'center' } }, 'Unlock more from reward drops and the Trophy Road.'));
+    shell(content, { profile: p });
   }
 
   // ---------- Friends (cloud) ----------
@@ -705,7 +923,7 @@
       const askReset = () => {
         confirmReset = p.id;
         resetArea.replaceChildren(h('div', { class: 'try row' }, h('span', {}, `Erase all of ${p.name}’s progress? This can’t be undone.`),
-          h('button', { class: 'btn-small', style: { borderColor: 'var(--bad)', color: 'var(--bad)' }, onclick: () => { for (const k of ['progress', 'days', 'gems', 'freezes', 'frozen']) delete db[k][p.id]; save(); go('parent'); } }, 'Erase'),
+          h('button', { class: 'btn-small', style: { borderColor: 'var(--bad)', color: 'var(--bad)' }, onclick: () => { for (const k of ['progress', 'days', 'gems', 'freezes', 'frozen', 'trophies', 'drops', 'inv', 'road', 'arenaSeen']) delete db[k][p.id]; save(); go('parent'); } }, 'Erase'),
           h('button', { class: 'btn-small', onclick: () => { confirmReset = null; resetArea.replaceChildren(); } }, 'Keep')));
       };
       return h('section', { class: 'card kid-report', 'data-track': p.track },
@@ -733,7 +951,7 @@
   // ---------- Render ----------
   function render() {
     if (!db.profiles.length && state.view !== 'setup') state.view = 'setup';
-    ({ setup: viewSetup, profiles: viewProfiles, pin: viewPin, home: viewHome, practice: viewPractice, labs: viewLabs, lab: viewLab, parent: viewParent, parentpin: viewParentPin, boot: viewProfiles }[state.view] || viewProfiles)();
+    ({ setup: viewSetup, profiles: viewProfiles, pin: viewPin, home: viewHome, practice: viewPractice, labs: viewLabs, lab: viewLab, parent: viewParent, drop: viewDrop, collection: viewCollection, parentpin: viewParentPin, boot: viewProfiles }[state.view] || viewProfiles)();
   }
   render();
 })();

@@ -27,14 +27,14 @@ const katexJs = local
 let config = read('src/config.js');
 if (artifact) config = 'window.MQ_CONFIG = {};';
 else if (process.env.MQ_SUPABASE_URL) config = `window.MQ_CONFIG = ${JSON.stringify({ supabaseUrl: process.env.MQ_SUPABASE_URL, supabaseAnonKey: process.env.MQ_SUPABASE_KEY || 'test-key' })};`;
-const scripts = `<script>/* config */\n${config}\n</script>\n` + ['src/core.js', 'src/dom.js', 'src/tracks/grade3.js', 'src/tracks/grade7.js', 'src/tracks/geometry.js', 'src/widgets.js', 'src/game.js', 'src/cloud.js', 'src/app.js']
+const scripts = `<script>/* config */\n${config}\n</script>\n` + ['src/core.js', 'src/dom.js', 'src/tracks/grade3.js', 'src/tracks/grade7.js', 'src/tracks/geometry.js', 'src/widgets.js', 'src/game.js', 'src/rewards.js', 'src/arena.js', 'src/cloud.js', 'src/app.js']
   .map((f) => `<script>/* ${f} */\n${read(f).replace(/<\/script/gi, '<\\/script')}\n</script>`).join('\n');
 
 const html = `<title>MathQuest</title>
 <meta name="description" content="Math practice for Grade 3, Grade 7 and Geometry: adaptive questions, SmartScore mastery and hands-on Math Lab tools.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fredoka:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Fredoka:wght@500;600;700&family=Lilita+One&display=swap">
 <style>${katexCss}</style>
 <style>${read('src/styles.css')}</style>
 <div id="app"></div>

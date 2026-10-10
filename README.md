@@ -21,6 +21,10 @@ Math practice for one family: a 3rd grader, a 7th grader and a Geometry student.
 - **Gems & quests:** three daily quests open reward chests with gems; gems buy streak freezes.
 - **Family league:** everyone's XP for the last 7 days, ranked.
 - **Friends:** kids add friends from other families with a 6-character code; parents approve every friend. Needs a free Supabase project — see `supabase/README.md`.
+- **Arenas:** a moving background of floating math symbols that upgrades to a new arena (Chalk Meadow → Golden Galaxy) as trophies grow, with a level-up celebration.
+- **Trophies & Trophy Road:** finished lessons earn trophies (more for fewer mistakes); milestones unlock gems, reward drops, skins, hats and pins.
+- **Reward drops:** one per finished lesson; each tap can upgrade it from Rare up to Legendary before it opens.
+- **Collection:** dress up Pip with skins and hats, and wear a pin next to your name.
 - **Effects:** synthesized sound effects (mute button in the top bar), haptics on phones, confetti, combo bursts, and Pip the mascot.
 
 Every problem is generated from a seeded template, so practice never runs out. Each skill has three difficulty levels picked by SmartScore (level 1 below 40, level 2 from 40, level 3 from 75).
@@ -35,6 +39,8 @@ src/dom.js             DOM/SVG helpers and drag support shared with Lab tools
 src/tracks/*.js        one file per track: skill generators + Math Lab tools
 src/widgets.js         answer widgets: number, fraction, choice, number line, clock, grid point, ordering
 src/game.js            game layer: XP rules, quests, sound effects, mascot, confetti
+src/rewards.js         trophies, trophy road, reward drops, skins/hats/pins, callouts and screen shake
+src/arena.js           moving canvas background that changes with each arena
 src/cloud.js           friends client: anonymous sign-in and RPC calls to Supabase
 src/config.js          Supabase URL + anon key (blank = friends off)
 supabase/              friends database schema, security tests and setup guide
