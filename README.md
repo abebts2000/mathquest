@@ -25,7 +25,8 @@ Math practice for one family: a 3rd grader, a 7th grader and a Geometry student.
 - **Arenas:** a moving background of floating math symbols that upgrades to a new arena (Chalk Meadow → Golden Galaxy) as trophies grow, with a level-up celebration.
 - **Trophies & Trophy Road:** finished lessons earn trophies (more for fewer mistakes); milestones unlock gems, reward drops, skins, hats and pins.
 - **Reward drops:** one per finished lesson; each tap can upgrade it from Rare up to Legendary before it opens.
-- **Collection:** dress up Pip with skins and hats, and wear a pin next to your name.
+- **Mascots:** 15 original characters, 5 per grade, that get more grown-up with each grade. Grade 3 Crew (Pip, Bloop, Sprout, Chirp, Mochi) are cute and round; Grade 7 Squad (Volt, Blaze, Glitch, Orbit, Howl) are sporty and bold; Geometry Legends (Vector, Prism, Sentinel, Nova, Owlex) are sleek and angular. Your grade's set unlocks at 0/25/60/120/200 trophies; other grades' mascots turn up in Epic+ reward drops. Every mascot evolves Rookie → Pro (200 trophies, emblem) → Legend (500 trophies, glowing aura).
+- **Collection:** pick your mascot, dress it up with skins and hats, and wear a pin next to your name.
 - **Sound & voice:** punchy synthesized effects (drums, chord stabs, sparkles, risers) and a cheering American-English voice ("Good job!", "Well done!", "Woo hoo!", "Double!", "Legendary!") using the device's built-in text-to-speech. The top-bar button cycles sound + voice → sound only → muted.
 - **Correct-answer celebrations:** 16 full-screen effects (disco ball, fireworks, balloons, lasers, rocket, rainbow, comets, galaxy and more), shapes and lights only. A shuffle bag means no repeat until all have played, with random colours and positions each time; every 5-in-a-row plays two at once.
 - **Effects:** haptics on phones, confetti, combo callouts, screen shake, and Pip the mascot.
@@ -44,6 +45,7 @@ src/widgets.js         answer widgets: number, fraction, choice, number line, cl
 src/game.js            game layer: XP rules, quests, sound engine, mascot, confetti
 src/voice.js           spoken cheers and callouts via the Web Speech API
 src/rewards.js         trophies, trophy road, reward drops, skins/hats/pins, callouts and screen shake
+src/mascots.js         the 15 mascots, faces, evolution stages (SVG)
 src/celebrate.js       correct-answer celebration effects (canvas)
 src/arena.js           moving canvas background that changes with each arena
 src/cloud.js           friends client: anonymous sign-in and RPC calls to Supabase

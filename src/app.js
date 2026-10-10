@@ -6,6 +6,7 @@
   const Cloud = window.MathQuestCloud || { enabled: false };
   const R = window.MathQuestRewards;
   const A = window.MathQuestArena;
+  const M = window.MathQuestMascots;
   const C = window.MathQuestCelebrate || { play() {} };
   const V = window.MathQuestVoice || { line() {}, say() {}, setEnabled() {}, supported: false };
   const { h, svg, tex } = window.MathQuestDOM;
@@ -176,7 +177,7 @@
       h('div', { class: 'profiles' }, ...db.profiles.map((p) => {
         const streak = streakDays(p.id);
         return h('button', { class: 'profile-btn', onclick: () => (p.pin ? go('pin', { pid: p.id }) : go('home', { pid: p.id })) },
-          avatar(p, true), h('span', { class: 'name' }, p.name),
+          h('span', { class: 'profile-mascot' }, pip(p, 'idle', 92)), h('span', { class: 'name' }, p.name),
           h('span', { class: 'chip', 'data-track': p.track, style: { color: 'var(--t)', borderColor: 'var(--t)' } }, TRACK_LABEL[p.track] || p.track),
           h('span', { class: 'row', style: { gap: '10px', justifyContent: 'center', fontWeight: 700 } },
             h('span', { class: 'row', style: { gap: '3px' } }, G.flame(streak > 0, 20), String(streak)),
@@ -303,6 +304,20 @@
       h('aside', { class: 'home-side stack', style: { gap: '16px' } }, questsCard(p), Cloud.enabled ? friendsCard(p) : null, freezeCard(p), leagueCard(p)));
     shell(content, { profile: p, track: tr.id });
     if (!greeted[p.id]) { greeted[p.id] = true; V.line('hello', { name: p.name }, { delay: 400 }); }
+    const news = mascotNews(p);
+    const unlocks = news.filter((n) => n[0] === 'unlock').map((n) => n[1]), evolved = news.find((n) => n[0] === 'evolve');
+    const onHome = () => state.view === 'home' && state.pid === p.id;
+    if (unlocks.length) setTimeout(() => {
+      if (!onHome()) return;
+      const names = unlocks.map((m) => m.name);
+      R.callout(unlocks.length > 1 ? `${unlocks.length} NEW MASCOTS!` : 'NEW MASCOT!', '#3ccf6e', names.join(' · '));
+      V.say(unlocks.length > 1 ? `Woo hoo! New mascots: ${names.join(', ')}!` : `Woo hoo! ${names[0]} unlocked!`, { priority: 2 }); G.sfx.upgrade(2);
+    }, 900);
+    if (evolved) setTimeout(() => {
+      if (!onHome()) return;
+      const [, m, stg] = evolved;
+      R.callout('EVOLVED!', '#ffc928', `${m.name} is now ${M.STAGES[stg].name}`); V.say(`${m.name} evolved! ${M.STAGES[stg].name}!`, { priority: 2 }); G.sfx.levelup(); G.confetti();
+    }, unlocks.length ? 2700 : 900);
     const tierNow = tierOf(p.id);
     if (tierNow > (db.arenaSeen[p.id] || 0)) { db.arenaSeen[p.id] = tierNow; save(); setTimeout(() => arenaUnlocked(p, tierNow), 450); }
     if (usedFreeze) setTimeout(() => toast(`A streak freeze saved your streak! (${usedFreeze} day${usedFreeze > 1 ? 's' : ''} covered)`), 400);
@@ -590,15 +605,35 @@
   function invOf(pid) {
     const i = (db.inv[pid] = db.inv[pid] || {});
     i.skins = i.skins || ['classic']; i.hats = i.hats || ['none']; i.pins = i.pins || [];
-    i.skin = i.skin || 'classic'; i.hat = i.hat || 'none';
+    i.skin = i.skin || 'classic'; i.hat = i.hat || 'none'; i.mascots = i.mascots || [];
     return i;
   }
+  const trophiesOf = (pid) => db.trophies[pid] || 0;
+  // Mascots: your grade's five unlock with trophies; other grades' come from reward drops.
+  function mascotUnlocked(p, m) {
+    if (m.tier === p.track) return trophiesOf(p.id) >= M.UNLOCK_AT[M.ofTier(m.tier).indexOf(m)];
+    return invOf(p.id).mascots.includes(m.id);
+  }
+  function mascotOf(p) {
+    const id = invOf(p.id).mascot; const m = id && M.BY_ID[id];
+    return m && mascotUnlocked(p, m) ? m : M.BY_ID[M.defaultFor(p.track)];
+  }
+  const stageOf = (p) => M.stageFor(trophiesOf(p.id));
   function look(p) {
     const i = invOf(p.id); const s = R.SKINS.find((x) => x.id === i.skin);
-    return { color: (s && s.color) || 'var(--t)', hat: i.hat && i.hat !== 'none' ? i.hat : null };
+    return { color: (s && s.color) || null, hat: i.hat && i.hat !== 'none' ? i.hat : null };
   }
-  const pip = (p, state, size) => { const l = look(p); return G.mascot(state, size, l.color, l.hat); };
-  const trophiesOf = (pid) => db.trophies[pid] || 0;
+  const pip = (p, state, size, override) => { const l = look(p); const o = override || {}; return M.draw(o.id || mascotOf(p).id, state, size, 'color' in o ? o.color : l.color, 'hat' in o ? o.hat : l.hat, o.stage != null ? o.stage : stageOf(p)); };
+  // Tell the kid when a new mascot unlocks or their mascot evolves.
+  function mascotNews(p) {
+    const i = invOf(p.id); const news = [];
+    const seen = (i.mascotSeen = i.mascotSeen || [M.defaultFor(p.track)]);
+    for (const m of M.ofTier(p.track)) if (mascotUnlocked(p, m) && !seen.includes(m.id)) { seen.push(m.id); news.push(['unlock', m]); }
+    const stg = stageOf(p);
+    if (stg > (i.stageSeen || 0)) { i.stageSeen = stg; news.push(['evolve', mascotOf(p), stg]); }
+    if (news.length) save();
+    return news;
+  }
   const tierOf = (pid) => A.tierFor(trophiesOf(pid));
   function pinOf(p) {
     const i = invOf(p.id); const pin = R.PINS.find((x) => x.id === i.pin);
@@ -612,6 +647,7 @@
       case 'skin': if (!i.skins.includes(r.id)) i.skins.push(r.id); break;
       case 'hat': if (!i.hats.includes(r.id)) i.hats.push(r.id); break;
       case 'pin': if (!i.pins.includes(r.id)) i.pins.push(r.id); break;
+      case 'mascot': if (!i.mascots.includes(r.id)) i.mascots.push(r.id); break;
       case 'freeze':
         if ((db.freezes[p.id] || 0) < MAX_FREEZES) db.freezes[p.id] = (db.freezes[p.id] || 0) + 1;
         else db.gems[p.id] = (db.gems[p.id] || 0) + FREEZE_COST;
@@ -619,12 +655,13 @@
     }
     save();
   }
-  function rewardIcon(r, size = 56) {
+  function rewardIcon(r, size = 56, p = me()) {
     switch (r.type) {
       case 'gems': return G.gem(size);
       case 'drop': return R.dropBox(Math.min(4, (r.n || 1) - 1), size);
-      case 'skin': { const s = R.SKINS.find((x) => x.id === r.id); return G.mascot('happy', size, (s && s.color) || 'var(--t)'); }
-      case 'hat': return G.mascot('happy', size, 'var(--t)', r.id);
+      case 'skin': { const s = R.SKINS.find((x) => x.id === r.id); return p ? pip(p, 'happy', size, { color: (s && s.color) || null, hat: null }) : G.mascot('happy', size, (s && s.color) || 'var(--t)'); }
+      case 'hat': return p ? pip(p, 'happy', size, { hat: r.id, color: null }) : G.mascot('happy', size, 'var(--t)', r.id);
+      case 'mascot': return M.draw(r.id, 'cheer', size);
       case 'pin': { const s = R.PINS.find((x) => x.id === r.id); return h('span', { class: 'emoji-icon', style: { fontSize: size * 0.72 + 'px' } }, s ? s.e : '?'); }
       case 'freeze': return h('span', { class: 'emoji-icon freeze', style: { fontSize: size * 0.6 + 'px' } }, '❄');
       default: return h('span', {}, '?');
@@ -633,7 +670,7 @@
   const rarityOf = (r) => {
     const list = { skin: R.SKINS, hat: R.HATS, pin: R.PINS }[r.type];
     const item = list && list.find((x) => x.id === r.id);
-    return item ? item.rarity : r.type === 'drop' ? 2 : r.type === 'freeze' ? 3 : 1;
+    return item ? item.rarity : r.type === 'mascot' ? 3 : r.type === 'drop' ? 2 : r.type === 'freeze' ? 3 : 1;
   };
 
   function trophyRoad(p) {
@@ -735,7 +772,7 @@
         return;
       }
       opened = true;
-      const rew = R.rollDrop(rarity, invOf(p.id));
+      const rew = R.rollDrop(rarity, Object.assign({}, invOf(p.id), { mascotPool: M.LIST.filter((m) => m.tier !== p.track && !mascotUnlocked(p, m)).map((m) => m.id) }));
       grant(p, rew); db.drops[p.id] = left - 1; save();
       G.sfx.open(); R.shakeScreen('big'); G.buzz([30, 30, 90]);
       if (rew.type === 'gems') V.line('gems', { n: rew.n }, { priority: 2, delay: 800 });
@@ -748,48 +785,72 @@
         h('div', { class: 'rarity-label', style: { '--c': R.RARITY[rarity].color } }, R.RARITY[rarity].name),
         icon, h('h2', { class: 'outlined' }, d.title), h('p', { class: 'muted' }, d.sub),
         h('button', { class: 'btn3d wide yellow', onclick: () => go(more ? 'drop' : 'home', { pid: p.id }) }, more ? `Open next (${more})` : 'Collect'),
-        rew.type === 'skin' || rew.type === 'hat' || rew.type === 'pin' ? h('button', { class: 'btn-small', onclick: () => go('collection', { pid: p.id, tab: rew.type + 's' }) }, 'Try it on') : null));
+        rew.type === 'skin' || rew.type === 'hat' || rew.type === 'pin' || rew.type === 'mascot' ? h('button', { class: 'btn-small', onclick: () => go('collection', { pid: p.id, tab: rew.type + 's' }) }, rew.type === 'mascot' ? 'Pick this mascot' : 'Try it on') : null));
       if (rew.type === 'gems') setTimeout(() => R.flyTo(icon, '.stat-pill.gems', G.gem(22), 10), 300);
       const badge = document.querySelector('.drop-btn .badge'); if (badge) badge.textContent = String(more);
     });
   }
 
-  // ---------- Collection: dress up Pip ----------
+  // ---------- Collection: mascots, skins, hats, pins ----------
+  function mascotTile(p, m) {
+    const own = mascotUnlocked(p, m), on = mascotOf(p).id === m.id, mine = m.tier === p.track;
+    const need = mine ? M.UNLOCK_AT[M.ofTier(m.tier).indexOf(m)] : null;
+    const rar = mine ? Math.min(4, M.ofTier(m.tier).indexOf(m)) : 3;
+    return h('button', {
+      class: 'collect-tile mascot-tile' + (own ? '' : ' locked') + (on ? ' on' : ''), style: { '--c': R.RARITY[rar].color },
+      disabled: !own, 'aria-pressed': String(on), 'aria-label': own ? `${m.name}: ${m.blurb}` : `${m.name} is locked`,
+      onclick: () => { invOf(p.id).mascot = m.id; save(); G.sfx.upgrade(1); V.say(`Hi! I'm ${m.name}!`, { priority: 2 }); go('collection', { pid: p.id, tab: 'mascots' }); }
+    }, h('span', { class: 'tile-art' }, M.draw(m.id, own ? 'happy' : 'idle', 72, null, null, own ? stageOf(p) : 0)),
+    h('span', { class: 'tile-name' }, own ? m.name : '???'),
+    h('span', { class: 'tile-rarity' }, on ? 'Your mascot' : own ? M.STAGES[stageOf(p)].name : mine ? `${need} 🏆` : 'Drops only'));
+  }
   function viewCollection() {
     const p = me(); if (!p) return go('profiles');
-    const tab = state.tab || 'skins';
+    const tab = state.tab || 'mascots';
     const i = invOf(p.id);
-    const lists = { skins: R.SKINS, hats: R.HATS, pins: R.PINS };
-    const owned = { skins: i.skins, hats: i.hats, pins: i.pins }[tab];
-    const equipped = { skins: i.skin, hats: i.hat, pins: i.pin }[tab];
-    const total = R.SKINS.length + R.HATS.length + R.PINS.length;
-    const have = i.skins.length + i.hats.length + i.pins.length;
-    const lk = look(p);
-    const icon = (x) => tab === 'skins' ? G.mascot('idle', 64, x.color || 'var(--t)', lk.hat)
-      : tab === 'hats' ? G.mascot('idle', 64, lk.color, x.id === 'none' ? null : x.id)
-      : h('span', { class: 'emoji-icon', style: { fontSize: '40px' } }, x.e);
-    const grid = h('div', { class: 'collect-grid' }, ...lists[tab].map((x) => {
-      const own = owned.includes(x.id), on = equipped === x.id;
-      return h('button', {
-        class: 'collect-tile' + (own ? '' : ' locked') + (on ? ' on' : ''), style: { '--c': R.RARITY[x.rarity].color },
-        disabled: !own, 'aria-pressed': String(on),
-        onclick: () => {
-          if (tab === 'skins') i.skin = x.id; else if (tab === 'hats') i.hat = x.id; else i.pin = on ? null : x.id;
-          save(); G.sfx.upgrade(0); go('collection', { pid: p.id, tab });
-        }
-      }, h('span', { class: 'tile-art' }, icon(x)), h('span', { class: 'tile-name' }, own ? (x.name || '') : '???'),
-      h('span', { class: 'tile-rarity' }, on ? 'Equipped' : R.RARITY[x.rarity].name));
-    }));
+    const total = R.SKINS.length + R.HATS.length + R.PINS.length + M.LIST.length;
+    const have = i.skins.length + i.hats.length + i.pins.length + M.LIST.filter((m) => mascotUnlocked(p, m)).length;
+    const cur = mascotOf(p), stg = stageOf(p), next = M.STAGES[stg + 1];
+    let body;
+    if (tab === 'mascots') {
+      const order = [p.track].concat(['g3', 'g7', 'geo'].filter((t) => t !== p.track));
+      body = h('div', { class: 'stack', style: { gap: '18px' } },
+        h('div', { class: 'evolve-card' },
+          h('div', { class: 'evolve-row' }, ...M.STAGES.map((sg, k) => h('div', { class: 'evolve-step' + (k <= stg ? ' got' : '') + (k === stg ? ' now' : '') },
+            pip(p, k <= stg ? 'happy' : 'idle', 70, { stage: k }), h('b', {}, sg.name), h('span', { class: 'tnum' }, k === 0 ? 'Start' : `${sg.at} 🏆`)))),
+          h('p', { class: 'muted', style: { textAlign: 'center', fontSize: '.9rem' } }, next ? `${cur.name} evolves to ${next.name} at ${next.at} trophies (${next.at - trophiesOf(p.id)} to go).` : `${cur.name} is a Legend! Fully evolved.`)),
+        ...order.map((t) => h('section', { class: 'stack', style: { gap: '8px' } },
+          h('h3', { class: 'tier-title' }, M.TIERS[t], t === p.track ? h('span', { class: 'chip' }, 'Your grade') : h('span', { class: 'chip' }, 'Rare: find in Epic+ drops')),
+          h('div', { class: 'collect-grid' }, ...M.ofTier(t).map((m) => mascotTile(p, m))))));
+    } else {
+      const lists = { skins: R.SKINS, hats: R.HATS, pins: R.PINS };
+      const owned = { skins: i.skins, hats: i.hats, pins: i.pins }[tab];
+      const equipped = { skins: i.skin, hats: i.hat, pins: i.pin }[tab];
+      const icon = (x) => tab === 'skins' ? pip(p, 'idle', 64, { color: x.color || null })
+        : tab === 'hats' ? pip(p, 'idle', 64, { hat: x.id === 'none' ? null : x.id })
+        : h('span', { class: 'emoji-icon', style: { fontSize: '40px' } }, x.e);
+      body = h('div', { class: 'collect-grid' }, ...lists[tab].map((x) => {
+        const own = owned.includes(x.id), on = equipped === x.id;
+        return h('button', {
+          class: 'collect-tile' + (own ? '' : ' locked') + (on ? ' on' : ''), style: { '--c': R.RARITY[x.rarity].color },
+          disabled: !own, 'aria-pressed': String(on),
+          onclick: () => {
+            if (tab === 'skins') i.skin = x.id; else if (tab === 'hats') i.hat = x.id; else i.pin = on ? null : x.id;
+            save(); G.sfx.upgrade(0); go('collection', { pid: p.id, tab });
+          }
+        }, h('span', { class: 'tile-art' }, icon(x)), h('span', { class: 'tile-name' }, own ? (x.name || '') : '???'),
+        h('span', { class: 'tile-rarity' }, on ? 'Equipped' : R.RARITY[x.rarity].name));
+      }));
+    }
     const content = h('div', { class: 'stack', style: { gap: '16px' } },
       h('div', { class: 'practice-head' }, h('button', { class: 'btn-small', onclick: () => go('home', { pid: p.id }) }, '‹ Back')),
       h('div', { class: 'collect-hero' },
         h('div', { class: 'collect-rays' }, R.rays(R.RARITY[4].color, 260)),
-        pip(p, 'cheer', 150), pinOf(p),
-        h('h1', { class: 'outlined' }, 'Collection'),
+        pip(p, 'cheer', 150), h('div', { class: 'mascot-name' }, cur.name, pinOf(p)), h('span', { class: 'muted' }, `${M.STAGES[stg].name} · ${cur.blurb}`),
         h('span', { class: 'collect-count tnum' }, `${have} / ${total} collected`)),
-      h('div', { class: 'tabs collect-tabs' }, ...[['skins', 'Skins'], ['hats', 'Hats'], ['pins', 'Pins']].map(([k, label]) =>
+      h('div', { class: 'tabs collect-tabs' }, ...[['mascots', 'Mascots'], ['skins', 'Skins'], ['hats', 'Hats'], ['pins', 'Pins']].map(([k, label]) =>
         h('button', { class: 'btn-small' + (k === tab ? ' on' : ''), onclick: () => go('collection', { pid: p.id, tab: k }) }, label))),
-      grid,
+      body,
       h('p', { class: 'muted', style: { textAlign: 'center' } }, 'Unlock more from reward drops and the Trophy Road.'));
     shell(content, { profile: p });
   }

@@ -81,6 +81,8 @@
       for (const s of unowned(HATS, 'hats')) pool.push({ type: 'hat', id: s.id });
       for (const s of unowned(PINS, 'pins')) pool.push({ type: 'pin', id: s.id });
       if (rarity >= 3) pool.push({ type: 'freeze', n: 1 });
+      // Mascots from other grades turn up in Epic and better drops (twice as likely as one item).
+      if (rarity >= 2) for (const id of inv.mascotPool || []) pool.push({ type: 'mascot', id }, { type: 'mascot', id });
     }
     if (pool.length) return pool[Math.floor(rand() * pool.length)];
     return { type: 'gems', n: gems[0] + Math.floor(rand() * (gems[1] - gems[0] + 1)) };
@@ -93,6 +95,7 @@
       case 'hat': { const s = HATS.find((x) => x.id === r.id); return { title: s.name, sub: 'Something for Pip to wear' }; }
       case 'pin': { const s = PINS.find((x) => x.id === r.id); return { title: s.e + ' pin', sub: 'Shows next to your name' }; }
       case 'freeze': return { title: 'Streak freeze', sub: 'Saves your streak on a missed day' };
+      case 'mascot': { const M = window.MathQuestMascots; const m = M && M.BY_ID[r.id]; return { title: m ? m.name : 'New mascot', sub: m ? `New mascot from the ${M.TIERS[m.tier]}!` : 'New mascot!' }; }
       default: return { title: 'Reward', sub: '' };
     }
   }
