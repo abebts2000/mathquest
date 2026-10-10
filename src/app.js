@@ -6,6 +6,7 @@
   const Cloud = window.MathQuestCloud || { enabled: false };
   const R = window.MathQuestRewards;
   const A = window.MathQuestArena;
+  const C = window.MathQuestCelebrate || { play() {} };
   const V = window.MathQuestVoice || { line() {}, say() {}, setEnabled() {}, supported: false };
   const { h, svg, tex } = window.MathQuestDOM;
   const { makeWidget, answerText } = window.MathQuestWidgets;
@@ -453,6 +454,7 @@
 
       if (ok) {
         G.sfx.correct(L.combo); G.buzz(12);
+        C.play({ combo: L.combo });
         if (!comboHit && !({ 2: 1, 3: 1, 4: 1 })[L.combo]) V.line('correct', null, { delay: 180 });
         G.floatText(top.querySelector('.lbar'), '+' + gained + ' XP', 'xp');
         const CALL = { 2: ['DOUBLE!', '#2f9bff'], 3: ['TRIPLE!', '#b05cff'], 4: ['ON FIRE!', '#ff8a1f'] };

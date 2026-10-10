@@ -591,3 +591,6 @@ body:has(.arena-bg) { background-image: none; }
 .tile-name { font-weight: 700; font-size: .85rem; }
 .tile-rarity { font: 700 .66rem/1 var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: var(--outline); background: var(--c); padding: 3px 6px; border-radius: 6px; }
 .halo { animation: bob 2s ease-in-out infinite; }
+
+/* Correct-answer celebrations */
+.celebrate-fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 45; }

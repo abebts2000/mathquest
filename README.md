@@ -26,6 +26,7 @@ Math practice for one family: a 3rd grader, a 7th grader and a Geometry student.
 - **Reward drops:** one per finished lesson; each tap can upgrade it from Rare up to Legendary before it opens.
 - **Collection:** dress up Pip with skins and hats, and wear a pin next to your name.
 - **Sound & voice:** punchy synthesized effects (drums, chord stabs, sparkles, risers) and a cheering American-English voice ("Good job!", "Well done!", "Woo hoo!", "Double!", "Legendary!") using the device's built-in text-to-speech. The top-bar button cycles sound + voice → sound only → muted.
+- **Correct-answer celebrations:** 16 full-screen effects (disco ball, fireworks, balloons, lasers, rocket, rainbow, comets, galaxy and more), shapes and lights only. A shuffle bag means no repeat until all have played, with random colours and positions each time; every 5-in-a-row plays two at once.
 - **Effects:** haptics on phones, confetti, combo callouts, screen shake, and Pip the mascot.
 
 Every problem is generated from a seeded template, so practice never runs out. Each skill has three difficulty levels picked by SmartScore (level 1 below 40, level 2 from 40, level 3 from 75).
@@ -42,6 +43,7 @@ src/widgets.js         answer widgets: number, fraction, choice, number line, cl
 src/game.js            game layer: XP rules, quests, sound engine, mascot, confetti
 src/voice.js           spoken cheers and callouts via the Web Speech API
 src/rewards.js         trophies, trophy road, reward drops, skins/hats/pins, callouts and screen shake
+src/celebrate.js       correct-answer celebration effects (canvas)
 src/arena.js           moving canvas background that changes with each arena
 src/cloud.js           friends client: anonymous sign-in and RPC calls to Supabase
 src/config.js          Supabase URL + anon key (blank = friends off)
