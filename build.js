@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /* Bundles MathQuest into one HTML file.
-   node build.js          → dist/index.html (KaTeX JS from cdnjs, CSS + fonts inlined; for publishing)
+   node build.js          → dist/index.html, a full HTML document (for GitHub Pages or any static host)
+   node build.js --artifact → dist/artifact.html, page body only (Claude artifacts add their own skeleton)
    node build.js --local  → test/dev.html  (KaTeX from vendor/ via file://; for offline testing) */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const ROOT = __dirname;
 const local = process.argv.includes('--local');
+const artifact = process.argv.includes('--artifact');
 const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
 const KATEX_VER = '0.16.11';
 
@@ -34,7 +36,15 @@ const html = `<title>MathQuest</title>
 ${katexJs}
 ${scripts}
 `;
-const out = local ? path.join(ROOT, 'test/dev.html') : path.join(ROOT, 'dist/index.html');
+const out = local ? path.join(ROOT, 'test/dev.html') : path.join(ROOT, artifact ? 'dist/artifact.html' : 'dist/index.html');
+const doc = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+</head><body>
+${html}</body></html>
+`;
 fs.mkdirSync(path.dirname(out), { recursive: true });
-fs.writeFileSync(out, local ? `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"></head><body>\n${html}</body></html>` : html);
+fs.writeFileSync(out, artifact ? html : doc);
 console.log(`wrote ${path.relative(ROOT, out)} (${(Buffer.byteLength(html) / 1024).toFixed(0)} KB)`);
