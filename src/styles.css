@@ -640,3 +640,10 @@ body:has(.arena-bg) { background-image: none; }
 .evolve-step:not(.got) .mascot { filter: grayscale(1) brightness(.7); }
 .evolve-step + .evolve-step::before { content: "›"; position: absolute; left: -10px; top: 26px; color: #ffc928; font: 400 1.6rem/1 var(--font-arena); }
 .mascot-tile .tile-art { height: 80px; }
+
+/* Mascot reads the question */
+.q-mascot { position: relative; border: 0; background: none; padding: 0; cursor: pointer; flex: none; -webkit-tap-highlight-color: transparent; }
+.q-speaker { position: absolute; right: -6px; bottom: 0; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: .72rem; background: var(--surface); border: 2px solid var(--outline, #1a1033); }
+.q-mascot.talking .pip-body { animation: talk .18s ease-in-out infinite alternate; transform-origin: 60px 104px; }
+.q-mascot.talking .q-speaker { animation: bump .4s ease infinite; background: #ffc928; }
+@keyframes talk { from { transform: scale(1, 1); } to { transform: scale(1.04, .94) translateY(2px); } }

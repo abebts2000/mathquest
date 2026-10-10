@@ -27,7 +27,7 @@
   // priority 1: everyday cheers (skipped if something is still being said)
   // priority 2: big moments (interrupts whatever is playing)
   function say(text, opts = {}) {
-    if (!enabled || !supported || !text) return;
+    if ((!enabled && !opts.force) || !supported || !text) return;
     const { priority = 1, delay = 0, pitch = 1.22, rate = 1.06 } = opts;
     setTimeout(() => {
       try {
@@ -37,10 +37,54 @@
         if (!voice) voice = pickVoice();
         u.lang = 'en-US'; if (voice) u.voice = voice;
         u.pitch = pitch; u.rate = rate; u.volume = 1;
+        if (opts.onstart) u.onstart = opts.onstart;
+        if (opts.onend) { u.onend = opts.onend; u.onerror = opts.onend; }
         synth.speak(u); lastAt = Date.now();
         if (window.__MQ_TEST__) (window.__MQ_TEST__.said = window.__MQ_TEST__.said || []).push(text);
       } catch (e) { /* speech not available here */ }
     }, delay);
+  }
+
+  // ---------- Reading math out loud ----------
+  const ORD = { 2: ['half', 'halves'], 3: ['third', 'thirds'], 4: ['fourth', 'fourths'], 5: ['fifth', 'fifths'], 6: ['sixth', 'sixths'], 7: ['seventh', 'sevenths'], 8: ['eighth', 'eighths'], 9: ['ninth', 'ninths'], 10: ['tenth', 'tenths'], 12: ['twelfth', 'twelfths'] };
+  function fracWords(a, b) {
+    a = a.trim(); b = b.trim();
+    if (/^\d+$/.test(a) && /^\d+$/.test(b) && ORD[+b] && +a <= 20) return ` ${a === '1' ? 'one' : a} ${+a === 1 ? ORD[+b][0] : ORD[+b][1]} `;
+    return ` ${a} over ${b} `;
+  }
+  // Turn LaTeX (the part between $...$) into words a speech engine reads well.
+  function latexToWords(t) {
+    t = ' ' + t + ' ';
+    t = t.replace(/\\left|\\right|\\displaystyle|\\[,;:! ]|~/g, ' ');
+    t = t.replace(/\\(?:text|mathrm|textbf|mathbf|operatorname)\{([^{}]*)\}/g, ' $1 ');
+    t = t.replace(/\\\$\s*([\d,]+(?:\.\d+)?)/g, ' $1 dollars ');
+    for (let i = 0; i < 6 && /\\[dt]?frac/.test(t); i++) t = t.replace(/(\d+)\s*\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}/g, (m, w, a, b) => ` ${w} and ${fracWords(a, b)}`).replace(/\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}/g, (m, a, b) => fracWords(a, b));
+    t = t.replace(/\\sqrt\[3\]\{([^{}]*)\}/g, ' cube root of $1 ').replace(/\\sqrt\{([^{}]*)\}/g, ' square root of $1 ').replace(/\\sqrt\s*(\d+)/g, ' square root of $1 ');
+    t = t.replace(/\\overleftrightarrow\{([^{}]*)\}/g, ' line $1 ').replace(/\\overrightarrow\{([^{}]*)\}/g, ' ray $1 ').replace(/\\overline\{([^{}]*)\}/g, ' segment $1 ');
+    t = t.replace(/\^\s*\{?\\circ\}?/g, ' degrees ').replace(/\^\s*\{?2\}?(?![\d])/g, ' squared ').replace(/\^\s*\{?3\}?(?![\d])/g, ' cubed ').replace(/\^\s*\{([^{}]*)\}/g, ' to the power of $1 ').replace(/\^\s*(\w)/g, ' to the power of $1 ');
+    t = t.replace(/_\{([^{}]*)\}/g, ' sub $1 ').replace(/_(\w)/g, ' sub $1 ');
+    const W = [[/\\times|\\cdot/g, ' times '], [/\\div/g, ' divided by '], [/\\pm/g, ' plus or minus '], [/\\(?:leq|le)\b/g, ' is less than or equal to '], [/\\(?:geq|ge)\b/g, ' is greater than or equal to '], [/\\(?:neq|ne)\b/g, ' is not equal to '], [/\\approx/g, ' is about '], [/\\cong/g, ' is congruent to '], [/\\sim/g, ' is similar to '], [/\\parallel/g, ' is parallel to '], [/\\perp/g, ' is perpendicular to '], [/\\angle/g, ' angle '], [/\\triangle/g, ' triangle '], [/\\pi/g, ' pi '], [/\\theta/g, ' theta '], [/\\infty/g, ' infinity '], [/\\%/g, ' percent '], [/\\(?:square|Box)/g, ' blank '], [/\\(?:ldots|dots|cdots)/g, ' and so on '], [/\\(?:to|rightarrow|mapsto|Rightarrow)/g, ' becomes '], [/\\(?:lt)\b/g, ' is less than '], [/\\(?:gt)\b/g, ' is greater than '], [/\\circ/g, ' degrees ']];
+    for (const [re, w] of W) t = t.replace(re, w);
+    t = t.replace(/(\w)\s*'/g, '$1 prime ');
+    t = t.replace(/\\[a-zA-Z]+/g, ' ').replace(/[{}]/g, ' ');
+    t = t.replace(/\s*<\s*/g, ' is less than ').replace(/\s*>\s*/g, ' is greater than ').replace(/=/g, ' equals ');
+    // minus vs negative
+    t = t.replace(/(^|[(\[,]|equals|times|divided by|over|than|to|plus|minus|and|of|becomes)\s*[-−]\s*/g, '$1 negative ');
+    t = t.replace(/\s*[-−]\s*/g, ' minus ').replace(/\+/g, ' plus ');
+    t = t.replace(/\b([A-Z])([A-Z])([A-Z])?\b/g, (m, a, b, c) => [a, b, c].filter(Boolean).join(' '));
+    t = t.replace(/\b([A-Z]'?(?: prime)?)\s*\(\s*([^()]+?)\s*,\s*([^()]+?)\s*\)/g, ' $1 at $2 comma $3 ').replace(/\(\s*([^()]+?)\s*,\s*([^()]+?)\s*\)/g, ' the point $1 comma $2 ');
+    t = t.replace(/\(\s*/g, ' (').replace(/\s*\)/g, ') ');
+    return t.replace(/\s+/g, ' ').trim();
+  }
+  // Prompt HTML with $math$ → plain spoken sentence.
+  function speakMath(html) {
+    if (!html) return '';
+    let s = String(html).replace(/<svg[\s\S]*?<\/svg>/gi, ' (picture) ');
+    s = s.replace(/\$((?:\\\$|[^$])+)\$/g, (m, tex) => ' ' + latexToWords(tex) + ' ');
+    s = s.replace(/<br\s*\/?>|<\/p>|<\/tr>|<\/li>/gi, '. ').replace(/<\/t[dh]>/gi, ', ').replace(/<[^>]+>/g, ' ');
+    try { const d = document.createElement('textarea'); d.innerHTML = s; s = d.value; } catch (e) { /* not in a browser */ }
+    s = s.replace(/°/g, ' degrees ').replace(/degrees\s*[-–]\s*/g, 'degrees, ').replace(/□|_{2,}/g, ' blank ').replace(/×/g, ' times ').replace(/÷/g, ' divided by ').replace(/°/g, ' degrees ').replace(/−(?=\d)/g, 'negative ');
+    return s.replace(/\s+([.,?!])/g, '$1').replace(/([.,])\1+/g, '$1').replace(/\s+/g, ' ').trim();
   }
   function pick(list) {
     let s, tries = 0;
@@ -75,7 +119,8 @@
     if (text) say(fill(text, vars), opts);
   }
   window.MathQuestVoice = {
-    supported, say, line,
+    supported, say, line, speakMath, latexToWords,
+    stop() { try { if (supported) synth.cancel(); } catch (e) { /* ignore */ } },
     // Parent view: list the American voices on this device and remember a choice.
     voices: () => usVoices().map((v) => v.name),
     get current() { return voice ? voice.name : ''; },

@@ -434,8 +434,12 @@
       check.disabled = !widget.ready();
       const hintBox = h('div');
       const tag = level === 3 ? 'Challenge' : level === 2 ? 'Level 2' : 'Level 1';
+      // The mascot reads the question aloud; tap it to hear it again (with the answer choices).
+      const readBtn = h('button', { class: 'q-mascot', 'aria-label': 'Hear the question', title: 'Tap to hear the question', onclick: () => readQuestion(pr, readBtn, true) },
+        pip(p, 'think', 56), V.supported ? h('span', { class: 'q-speaker', 'aria-hidden': 'true' }, '🔊') : null);
+      if (db.readAloud !== false && V.enabled) setTimeout(() => { if (problem === pr && phase === 'answer') readQuestion(pr, readBtn, false); }, 450);
       card.replaceChildren(
-        h('div', { class: 'q-head' }, pip(p, 'think', 52), h('div', { class: 'q-tag' }, h('span', { class: 'chip' }, tag), h('span', { class: 'muted' }, sk.title))),
+        h('div', { class: 'q-head' }, readBtn, h('div', { class: 'q-tag' }, h('span', { class: 'chip' }, tag), h('span', { class: 'muted' }, sk.title))),
         tex(h('div', { class: 'prompt', html: pr.prompt })),
         pr.figure ? tex(h('div', { class: 'figure', html: pr.figure })) : '',
         h('div', { class: 'answer-area' }, widget.el), hintBox);
@@ -448,6 +452,12 @@
       setTimeout(() => widget.focus && widget.focus(), 60);
     }
     // Hint button with the number left this lesson; shows a "hints left" note after each use.
+    function readQuestion(pr, btn, withChoices) {
+      if (db.muted || !V.supported) { if (withChoices) toast(db.muted ? 'Sound is off. Tap the speaker at the top to turn it on.' : 'This device can’t read aloud.'); return; }
+      let text = V.speakMath(pr.prompt);
+      if (withChoices && pr.input.type === 'choice') text += ' ' + pr.input.options.map((o, i) => `${'ABCDE'[i]}: ${/<svg/i.test(o) ? 'picture ' + (i + 1) : V.speakMath(o)}`).join('. ') + '.';
+      V.say(text, { priority: 2, pitch: 1.12, rate: 0.95, force: true, onstart: () => btn.classList.add('talking'), onend: () => btn.classList.remove('talking') });
+    }
     // Use the problem's hint, or else the first step of its worked solution (when there are later steps).
     const hintFor = (pr) => pr.hint || (Array.isArray(pr.explanation) && pr.explanation.length >= 2 ? pr.explanation[0] : null);
     function hintButton(hintHtml, hintBox) {
@@ -467,6 +477,7 @@
     }
     function grade() {
       if (phase !== 'answer' || !widget.ready()) return;
+      V.stop();
       phase = 'feedback';
       const ok = MQ.check(problem, widget.value());
       const secs = Math.min(120, Math.round((Date.now() - shownAt) / 1000));
@@ -1028,7 +1039,8 @@
         ...names.map((n) => h('option', { value: n, selected: db.voiceName === n }, n)));
       card.replaceChildren(h('h3', {}, 'Cheering voice'),
         h('p', { class: 'muted', style: { fontSize: '.9rem' } }, names.length ? `American English voices on this device: ${names.length}. Pick the one the kids like best.` : 'Uses this device’s American English voice.'),
-        h('div', { class: 'row' }, names.length ? h('label', { class: 'field', style: { flex: 1, minWidth: '200px' } }, sel) : null, preview));
+        h('div', { class: 'row' }, names.length ? h('label', { class: 'field', style: { flex: 1, minWidth: '200px' } }, sel) : null, preview),
+        h('label', { class: 'row', style: { gap: '8px', fontWeight: 700 } }, h('input', { type: 'checkbox', id: 'read-aloud', checked: db.readAloud !== false, onchange: (e) => { db.readAloud = e.target.checked; save(); } }), 'Mascot reads each question out loud'));
     };
     paint();
     try { window.speechSynthesis.addEventListener('voiceschanged', () => { if (card.isConnected) paint(); }, { once: true }); } catch (e) { /* ignore */ }
