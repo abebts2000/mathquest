@@ -22,7 +22,12 @@ const katexJs = local
   ? `<script src="file://${ROOT}/vendor/katex/katex.min.js"></script>\n<script src="file://${ROOT}/vendor/katex/contrib/auto-render.min.js"></script>`
   : `<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/${KATEX_VER}/katex.min.js"></script>\n<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/${KATEX_VER}/contrib/auto-render.min.js"></script>`;
 
-const scripts = ['src/core.js', 'src/dom.js', 'src/tracks/grade3.js', 'src/tracks/grade7.js', 'src/tracks/geometry.js', 'src/widgets.js', 'src/game.js', 'src/app.js']
+// Friends need network access to Supabase, which Claude artifacts block, so the artifact build leaves them off.
+// MQ_SUPABASE_URL / MQ_SUPABASE_KEY override src/config.js (used by tests).
+let config = read('src/config.js');
+if (artifact) config = 'window.MQ_CONFIG = {};';
+else if (process.env.MQ_SUPABASE_URL) config = `window.MQ_CONFIG = ${JSON.stringify({ supabaseUrl: process.env.MQ_SUPABASE_URL, supabaseAnonKey: process.env.MQ_SUPABASE_KEY || 'test-key' })};`;
+const scripts = `<script>/* config */\n${config}\n</script>\n` + ['src/core.js', 'src/dom.js', 'src/tracks/grade3.js', 'src/tracks/grade7.js', 'src/tracks/geometry.js', 'src/widgets.js', 'src/game.js', 'src/cloud.js', 'src/app.js']
   .map((f) => `<script>/* ${f} */\n${read(f).replace(/<\/script/gi, '<\\/script')}\n</script>`).join('\n');
 
 const html = `<title>MathQuest</title>

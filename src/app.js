@@ -3,6 +3,7 @@
   'use strict';
   const MQ = window.MathQuest;
   const G = window.MathQuestGame;
+  const Cloud = window.MathQuestCloud || { enabled: false };
   const { h, svg, tex } = window.MathQuestDOM;
   const { makeWidget, answerText } = window.MathQuestWidgets;
   const app = document.getElementById('app');
@@ -108,7 +109,7 @@
         return h('div', { class: 'card stack' },
           h('div', { class: 'row' }, avatar(r), h('h3', { 'data-title': r.id }, r.name || 'Player ' + (i + 1)), h('div', { style: { flex: 1 } }),
             rows.length > 1 ? h('button', { class: 'btn-small', onclick: () => { rows.splice(i, 1); draw(); } }, 'Remove') : null),
-          h('label', { class: 'field' }, h('span', { class: 'eyebrow' }, 'Name'),
+          h('label', { class: 'field' }, h('span', { class: 'eyebrow' }, Cloud.enabled ? 'Name (friends will see it, so a nickname works)' : 'Name'),
             h('input', { id: 'name-' + r.id, value: r.name, placeholder: placeholders[r.track] || 'Name', maxlength: 20, oninput: (e) => { r.name = e.target.value; const t = list.querySelector('[data-title="' + r.id + '"]'); if (t) t.textContent = r.name || 'Player ' + (i + 1); const av = t && t.previousSibling; if (av) av.textContent = (r.name || '?').trim().charAt(0).toUpperCase() || '?'; } })),
           h('div', { class: 'row' },
             h('label', { class: 'field', style: { flex: 1, minWidth: '140px' } }, h('span', { class: 'eyebrow' }, 'Main track'),
@@ -139,7 +140,9 @@
             if (r.pin && r.pin.length !== 4) { err.textContent = 'PINs need exactly 4 digits (or leave blank).'; return; }
           }
           if (parentPin && parentPin.length !== 4) { err.textContent = 'The parent PIN needs exactly 4 digits (or leave blank).'; return; }
-          db.profiles = rows.map((r) => ({ id: r.id, name: r.name.trim(), color: r.color, track: r.track, pin: r.pin || '' }));
+          const kept = new Set(rows.map((r) => r.id));
+          for (const old of db.profiles) if (!kept.has(old.id) && old.cloudId && Cloud.enabled) Cloud.deleteKid(old.cloudId).catch(() => {});
+          db.profiles = rows.map((r) => ({ id: r.id, name: r.name.trim(), color: r.color, track: r.track, pin: r.pin || '', cloudId: r.cloudId, code: r.code }));
           db.parentPin = parentPin; save(); go('profiles');
         } }, editing ? 'Save changes' : 'Start practising'),
         editing ? h('button', { class: 'btn ghost', onclick: () => go('parent') }, 'Cancel') : null));
@@ -276,7 +279,7 @@
           h('div', { class: 'stack', style: { gap: '2px', minWidth: 0 } }, h('span', { class: 'eyebrow' }, 'Unit 1'), h('h2', {}, tr.title), h('p', {}, tr.subtitle || '')),
           h('button', { class: 'banner-btn', onclick: () => go('labs', { pid: p.id, track: tr.id }), 'aria-label': 'Open Math Lab' }, 'Math Lab')),
         path),
-      h('aside', { class: 'home-side stack', style: { gap: '16px' } }, questsCard(p), freezeCard(p), leagueCard(p)));
+      h('aside', { class: 'home-side stack', style: { gap: '16px' } }, questsCard(p), Cloud.enabled ? friendsCard(p) : null, freezeCard(p), leagueCard(p)));
     shell(content, { profile: p, track: tr.id });
     if (usedFreeze) setTimeout(() => toast(`A streak freeze saved your streak! (${usedFreeze} day${usedFreeze > 1 ? 's' : ''} covered)`), 400);
   }
@@ -473,6 +476,7 @@
       L.xp += bonus; d.xp = (d.xp || 0) + bonus;
       save();
       const goalNow = d.xp >= G.DAILY_XP_GOAL;
+      cloudSync(p);
       const crownsNow = G.crownsFor(sp.score);
       const acc = L.asked ? Math.round((L.correct / L.asked) * 100) : 0;
       const streakNow = streakDays(p.id);
@@ -523,6 +527,118 @@
     }
     paintTop();
     nextProblem();
+  }
+
+  // ---------- Friends (cloud) ----------
+  const syncing = {};
+  // Push this kid's public card (name, colour, track, streak, XP) and learn their friend code.
+  function cloudSync(p) {
+    if (!Cloud.enabled || !db.parentPin) return Promise.resolve(null);
+    if (syncing[p.id]) return syncing[p.id];
+    const stats = { name: p.name, color: /^#[0-9a-fA-F]{6}$/.test(p.color) ? p.color : '#2563d9', track: p.track, streak: streakDays(p.id), weekXp: weekXp(p.id), totalXp: totalXp(p.id) };
+    syncing[p.id] = Cloud.saveKid(p.cloudId, stats).then((r) => {
+      const prof = db.profiles.find((x) => x.id === p.id);
+      if (r && prof && (prof.cloudId !== r.id || prof.code !== r.code)) { prof.cloudId = r.id; prof.code = r.code; p.cloudId = r.id; p.code = r.code; save(); }
+      return r;
+    }).finally(() => { delete syncing[p.id]; });
+    return syncing[p.id];
+  }
+  const FRIEND_MSG = {
+    sent: (n) => `Request sent! A parent in ${n ? n + '’s' : 'their'} family needs to approve it.`,
+    accepted: (n) => `You’re now friends${n ? ' with ' + n : ''}!`,
+    already: () => 'You’re already friends, or a request is waiting.',
+    not_found: () => 'No one has that code. Check the letters and try again.',
+    self: () => 'That’s your own code!',
+    limit: () => 'Too many requests are waiting. Ask a parent to check them first.'
+  };
+  function friendRow(f, extra) {
+    const ghost = { name: f.name, color: f.color };
+    return h('li', {},
+      avatar(ghost),
+      h('div', { class: 'stack', style: { gap: 0, flex: 1, minWidth: 0 } },
+        h('span', { class: 'lname' }, f.name),
+        f.kind === 'friend' ? h('span', { class: 'muted', style: { fontSize: '.8rem' } }, TRACK_LABEL[f.track] || '') : h('span', { class: 'muted', style: { fontSize: '.8rem' } }, f.kind === 'outgoing' ? 'Waiting for their parent' : 'Wants to be friends')),
+      f.kind === 'friend' ? h('span', { class: 'row', style: { gap: '2px', fontWeight: 700 } }, G.flame((f.streak || 0) > 0, 18), String(f.streak || 0)) : null,
+      f.kind === 'friend' ? h('b', { class: 'tnum', style: { minWidth: '4.5ch', textAlign: 'right' } }, (f.week_xp || 0) + ' XP') : null,
+      extra || null);
+  }
+  const NEEDS_PIN = 'Friends need a parent PIN, so a grown-up approves every friend. A parent can set one in Parent view → Edit players.';
+  function friendsCard(p) {
+    if (!db.parentPin) return h('section', { class: 'side-card friends-card' }, h('h3', {}, 'Friends'), h('p', { class: 'muted', style: { fontSize: '.9rem' } }, NEEDS_PIN));
+    const body = h('div', { class: 'stack', style: { gap: '10px' } }, h('p', { class: 'muted' }, 'Loading friends…'));
+    const card = h('section', { class: 'side-card friends-card' },
+      h('div', { class: 'row', style: { justifyContent: 'space-between' } }, h('h3', {}, 'Friends'),
+        h('button', { class: 'btn3d small', onclick: () => addFriendSheet(p) }, '+ Add')),
+      body);
+    cloudSync(p).then(() => Cloud.overview(p.cloudId)).then((rows) => {
+      rows = rows || [];
+      const friends = rows.filter((r) => r.kind === 'friend').sort((a, b) => (b.week_xp || 0) - (a.week_xp || 0));
+      const outgoing = rows.filter((r) => r.kind === 'outgoing');
+      const incoming = rows.filter((r) => r.kind === 'incoming');
+      const codeEl = h('b', { class: 'friend-code tnum' }, p.code || '······');
+      const copy = h('button', { class: 'btn-small', onclick: () => {
+        const done = () => { copy.textContent = 'Copied!'; setTimeout(() => (copy.textContent = 'Copy'), 1500); };
+        try { navigator.clipboard.writeText(p.code).then(done, () => selectText(codeEl)); } catch (e) { selectText(codeEl); }
+      } }, 'Copy');
+      body.replaceChildren(...[
+        h('div', { class: 'code-box' }, h('span', { class: 'muted', style: { fontSize: '.85rem' } }, 'Your friend code'), h('div', { class: 'row', style: { justifyContent: 'space-between' } }, codeEl, copy)),
+        friends.length ? h('ol', { class: 'league' }, ...friends.map((f) => friendRow(f))) : h('p', { class: 'muted', style: { fontSize: '.9rem' } }, 'No friends yet. Share your code with a cousin or classmate, or tap Add to enter theirs.'),
+        outgoing.length ? h('ol', { class: 'league' }, ...outgoing.map((f) => friendRow(f))) : null,
+        incoming.length ? h('p', { class: 'try' }, `${incoming.length} friend request${incoming.length > 1 ? 's' : ''} waiting. A parent can approve ${incoming.length > 1 ? 'them' : 'it'} in Parent view.`) : null].filter(Boolean));
+    }).catch((e) => { body.replaceChildren(h('p', { class: 'muted', style: { fontSize: '.9rem' } }, 'Friends are offline right now. Check the internet connection and come back.')); console.warn('friends:', e.message); });
+    return card;
+  }
+  function selectText(el) { try { const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); } catch (e) { /* ignore */ } }
+  function addFriendSheet(p) {
+    G.sfx.tap();
+    const scrim = h('div', { class: 'sheet-scrim', onclick: (e) => { if (e.target === scrim) close(); } });
+    const close = () => { scrim.remove(); if (cleanup) { cleanup(); cleanup = null; } };
+    const input = h('input', { id: 'friend-code', class: 'code-input', maxlength: 6, autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false', placeholder: 'ABC123', 'aria-label': 'Friend code',
+      oninput: (e) => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); send.disabled = e.target.value.length !== 6; } });
+    const msg = h('p', { class: 'muted', role: 'status', style: { minHeight: '1.4em' } });
+    const send = h('button', { class: 'btn3d wide', disabled: true, onclick: () => askPin() }, 'Send request');
+    const sheet = h('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Add a friend' },
+      G.mascot('happy', 64, 'var(--t)'), h('h2', {}, 'Add a friend'),
+      h('p', { class: 'muted' }, 'Type your friend’s 6-character code. Their parent approves the request before you see each other’s progress.'),
+      input, msg, send, h('button', { class: 'btn3d wide ghost', onclick: close }, 'Cancel'));
+    scrim.append(sheet);
+    document.body.appendChild(scrim);
+    setTimeout(() => input.focus(), 50);
+    function askPin() {
+      sheet.replaceChildren(pinPad('Parent check', 'A parent enters the PIN to send this request', db.parentPin, () => { sheet.replaceChildren(G.mascot('think', 64, 'var(--t)'), h('h2', {}, 'Sending…')); submit(); }, close));
+    }
+    function submit() {
+      send.disabled = true; msg.textContent = 'Sending…';
+      cloudSync(p).then(() => Cloud.sendRequest(p.cloudId, input.value)).then((res) => {
+        const ok = res === 'sent' || res === 'accepted';
+        if (ok) { G.sfx.chest(); G.confetti({ count: 60 }); }
+        else G.sfx.wrong();
+        sheet.replaceChildren(G.mascot(ok ? 'cheer' : 'sad', 72, 'var(--t)'), h('h2', {}, ok ? (res === 'accepted' ? 'Friends!' : 'Request sent!') : 'Hmm…'),
+          h('p', { class: 'muted' }, (FRIEND_MSG[res] || (() => 'Something went wrong.'))()),
+          h('button', { class: 'btn3d wide', onclick: () => { close(); go('home', { pid: p.id, track: state.track }); } }, ok ? 'Done' : 'Try again later'));
+      }).catch(() => {
+        sheet.replaceChildren(G.mascot('sad', 72, 'var(--t)'), h('h2', {}, 'Couldn’t send'), h('p', { class: 'muted' }, 'The friends server didn’t answer. Check the internet connection and try again.'),
+          h('button', { class: 'btn3d wide', onclick: close }, 'OK'));
+      });
+    }
+  }
+  function parentFriends(p) {
+    if (!db.parentPin) return h('div', { class: 'stack parent-friends', style: { gap: '8px' } }, h('span', { class: 'eyebrow' }, 'Friends'), h('p', { class: 'muted', style: { fontSize: '.9rem' } }, 'Set a parent PIN (Edit players) to turn on friends. Nothing is shared online until you do.'));
+    const box = h('div', { class: 'stack parent-friends', style: { gap: '8px' } }, h('span', { class: 'eyebrow' }, 'Friends'), h('p', { class: 'muted' }, 'Loading…'));
+    const load = () => cloudSync(p).then(() => Cloud.overview(p.cloudId)).then((rows) => {
+      rows = rows || [];
+      const incoming = rows.filter((r) => r.kind === 'incoming');
+      const others = rows.filter((r) => r.kind !== 'incoming');
+      const act = (label, cls, fn) => h('button', { class: 'btn-small ' + (cls || ''), onclick: (e) => { e.currentTarget.disabled = true; fn().then(load, () => { e.currentTarget.disabled = false; }); } }, label);
+      box.replaceChildren(...[h('span', { class: 'eyebrow' }, `Friends · code ${p.code || '…'}`),
+        incoming.length ? h('div', { class: 'stack', style: { gap: '6px' } }, h('b', {}, 'Requests to approve'),
+          h('ol', { class: 'league' }, ...incoming.map((f) => friendRow(f, h('span', { class: 'row', style: { gap: '6px' } },
+            act('Approve', 'approve', () => Cloud.respond(f.request_id, true)), act('Decline', '', () => Cloud.respond(f.request_id, false))))))) : null,
+        others.length ? h('ol', { class: 'league' }, ...others.map((f) => friendRow(f, act(f.kind === 'friend' ? 'Remove' : 'Cancel', '', () => Cloud.remove(p.cloudId, f.kid_id)))))
+          : incoming.length ? null : h('p', { class: 'muted', style: { fontSize: '.9rem' } }, 'No friends or requests yet.')].filter(Boolean));
+    }).catch(() => box.replaceChildren(h('span', { class: 'eyebrow' }, 'Friends'), h('p', { class: 'muted' }, 'Friends are offline right now.')));
+    load();
+    return box;
   }
 
   // ---------- Toast ----------
@@ -602,6 +718,7 @@
         rows.length ? h('div', { class: 'table-scroll' }, h('table', {},
           h('thead', {}, h('tr', {}, h('th', {}, 'Skill'), h('th', { class: 'n' }, 'SmartScore'), h('th', { class: 'n' }, 'Answered'), h('th', { class: 'n' }, 'Accuracy'), h('th', { class: 'n' }, 'Time'))),
           h('tbody', {}, ...rows))) : h('p', { class: 'muted' }, 'No practice yet. Skills show up here after the first answer.'),
+        Cloud.enabled ? parentFriends(p) : null,
         resetArea);
     }
     const content = h('div', { class: 'stack', style: { gap: '20px' } },

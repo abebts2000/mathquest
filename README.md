@@ -20,11 +20,12 @@ Math practice for one family: a 3rd grader, a 7th grader and a Geometry student.
 - **Daily goal & streaks:** 100 XP a day; a flame streak that grows each day you practise, protected by streak freezes.
 - **Gems & quests:** three daily quests open reward chests with gems; gems buy streak freezes.
 - **Family league:** everyone's XP for the last 7 days, ranked.
+- **Friends:** kids add friends from other families with a 6-character code; parents approve every friend. Needs a free Supabase project — see `supabase/README.md`.
 - **Effects:** synthesized sound effects (mute button in the top bar), haptics on phones, confetti, combo bursts, and Pip the mascot.
 
 Every problem is generated from a seeded template, so practice never runs out. Each skill has three difficulty levels picked by SmartScore (level 1 below 40, level 2 from 40, level 3 from 75).
 
-Kid profiles, PINs and progress are stored in the browser's local storage on each device. Nothing is sent to a server.
+Kid profiles, PINs and progress are stored in the browser's local storage on each device. With friends turned on, only each kid's display name, colour, track, streak and XP are shared, and only with approved friends.
 
 ## Project layout
 
@@ -34,6 +35,9 @@ src/dom.js             DOM/SVG helpers and drag support shared with Lab tools
 src/tracks/*.js        one file per track: skill generators + Math Lab tools
 src/widgets.js         answer widgets: number, fraction, choice, number line, clock, grid point, ordering
 src/game.js            game layer: XP rules, quests, sound effects, mascot, confetti
+src/cloud.js           friends client: anonymous sign-in and RPC calls to Supabase
+src/config.js          Supabase URL + anon key (blank = friends off)
+supabase/              friends database schema, security tests and setup guide
 src/app.js             the UI: setup, profiles, skill path, lessons, Math Lab, parent view
 src/styles.css         theme (light + dark) and components
 CONTRACT.md            the interface every track file follows — read this before adding skills

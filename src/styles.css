@@ -452,3 +452,12 @@ main.wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-bloc
 @keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
 @keyframes pop-in { from { opacity: 0; transform: scale(.6); } }
 .flame.lit { filter: drop-shadow(0 1px 2px rgba(255, 120, 0, .35)); }
+
+/* Friends */
+.code-box { background: var(--surface-2); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.friend-code { font: 700 1.6rem/1 var(--font-display); letter-spacing: .14em; color: var(--t, var(--accent)); user-select: all; }
+.code-input { width: 100%; max-width: 260px; text-align: center; font: 700 2rem/1 var(--font-display); letter-spacing: .25em; text-transform: uppercase; padding: .45em .4em; border-radius: 16px; border: 2px solid var(--line); border-bottom-width: 5px; background: var(--paper); }
+.code-input:focus { outline: none; border-color: var(--t, var(--accent)); }
+.parent-friends { border-top: 1px solid var(--line); padding-top: 12px; }
+.btn-small.approve { background: var(--good); border-color: var(--good); color: var(--on-t); }
+.sheet .card { box-shadow: none; border: 0; padding: 0; }
