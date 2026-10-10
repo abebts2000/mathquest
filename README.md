@@ -16,7 +16,7 @@ Math practice for one family: a 3rd grader, a 7th grader and a Geometry student.
 
 - **Skill path:** each track is a winding path of skill nodes with crowns (levels 1–3) and Math Lab chests along the way.
 - **Lessons:** 10 correct answers finish a lesson. Missed questions show the worked solution, then the lesson keeps going.
-- **Hints:** 3 per lesson by default (parents can choose 0, 1, 2, 3, 5 or unlimited). The Hint button shows how many are left, and each hint says how many remain.
+- **Hints:** 3 per lesson by default (parents can choose 0, 1, 2, 3, 5 or unlimited). The Hint button shows how many are left, and each hint flashes a big "2 HINTS LEFT" banner.
 - **XP & combos:** +5 XP per correct answer, +5 bonus every 5 in a row, +20 for finishing, +15 for a perfect lesson.
 - **Daily goal & streaks:** 100 XP a day; a flame streak that grows each day you practise, protected by streak freezes.
 - **Gems & quests:** three daily quests open reward chests with gems; gems buy streak freezes.

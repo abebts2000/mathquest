@@ -445,6 +445,7 @@
         const note = unlimited ? null : left === 0 ? 'That was your last hint for this lesson. You’ve got this!' : `You have ${left} hint${left === 1 ? '' : 's'} left in this lesson.`;
         hintBox.replaceChildren(tex(h('div', { class: 'hint' }, h('div', { html: hintHtml }),
           note ? h('div', { class: 'hint-left' + (left === 0 ? ' last' : '') }, h('span', { class: 'hint-bulbs', 'aria-hidden': 'true' }, ...Array.from({ length: hintLimit() }, (_, i) => h('i', { class: i < left ? 'on' : '' }))), note) : null)));
+        if (note) R.callout(left === 0 ? 'LAST HINT!' : `${left} HINT${left === 1 ? '' : 'S'} LEFT`, left === 0 ? '#ff8a1f' : '#ffc928', left === 0 ? 'You’ve got this!' : 'in this lesson');
         if (note) V.say(left === 0 ? 'That was your last hint!' : `${left} hint${left === 1 ? '' : 's'} left!`, { delay: 150 });
         e.currentTarget.remove();
       } }, 'Hint', unlimited ? null : h('span', { class: 'hint-count tnum' }, String(L.hintsLeft)));

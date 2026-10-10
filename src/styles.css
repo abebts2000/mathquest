@@ -604,3 +604,9 @@ body:has(.arena-bg) { background-image: none; }
 .hint-bulbs { display: inline-flex; gap: 3px; flex: none; }
 .hint-bulbs i { width: 10px; height: 14px; border-radius: 50% 50% 40% 40%; background: var(--line); }
 .hint-bulbs i.on { background: #ffc928; box-shadow: 0 0 6px rgba(255, 201, 40, .8); }
+/* Big hint counter */
+.hint-left { font: 400 1.45rem/1.15 var(--font-arena, var(--font-display)); letter-spacing: .01em; gap: 12px; padding-top: 10px; }
+.hint-bulbs { gap: 5px; }
+.hint-bulbs i { width: 16px; height: 22px; }
+.hint-btn { font-size: 1.15rem; }
+.hint-count { min-width: 30px; height: 30px; border-radius: 15px; font: 400 1.15rem/1 var(--font-arena, var(--font-display)); }
