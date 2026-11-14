@@ -34,12 +34,33 @@
     document.body.appendChild(cv); g = cv.getContext('2d'); size(); window.addEventListener('resize', size);
   }
   function size() { const dpr = Math.min(2, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0); }
+  // ---------- Mascot cameos: the kid's mascot jumps into the effect ----------
+  let rider = null;
+  function setRider(img) { rider = img || null; }
+  const OWN_RIDER = { balloons: 1, rocket: 1, planes: 1 };
+  const MOVES = ['hop', 'peek', 'zip', 'spin', 'bounce'];
+  function drawCameo(g, e, k) {
+    const img = e.rider; if (!img || !img.complete || !img.naturalWidth) return;
+    const s = Math.min(W, H) * 0.3, floor = H - Math.min(170, H * 0.2), d = e.dir;
+    const io = k < 0.15 ? k / 0.15 : k > 0.82 ? Math.max(0, (1 - k) / 0.18) : 1;
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+    let x, y, rot = 0, sc = 1;
+    switch (e.move) {
+      case 'dance': x = W / 2 + Math.sin(e.age * 0.008) * s * 0.3; y = floor - s / 2 - Math.abs(Math.sin(e.age * 0.012)) * s * 0.2 + (1 - ease(io)) * (H - floor + s); rot = Math.sin(e.age * 0.008) * 0.28; break;
+      case 'hop': x = d > 0 ? -s / 2 + (W + s) * k : W + s / 2 - (W + s) * k; y = floor - s / 2 - Math.sin(k * Math.PI) * H * 0.42; rot = k * TAU * d; break;
+      case 'peek': x = e.px * W; y = floor + s * 0.6 - ease(io) * s * 1.1; rot = Math.sin(e.age * 0.01) * 0.18; break;
+      case 'zip': x = d > 0 ? -s / 2 + (W + s) * k : W + s / 2 - (W + s) * k; y = floor - s / 2 - Math.abs(Math.sin(e.age * 0.014)) * s * 0.35; rot = d * 0.15; break;
+      case 'bounce': x = e.px * W; y = floor - s / 2 - Math.abs(Math.sin(e.age * 0.009)) * H * 0.25 + (1 - ease(io)) * (H - floor + s); sc = 1 + Math.sin(e.age * 0.018) * 0.06; break;
+      default: x = W / 2; y = floor - s / 2 + (1 - ease(io)) * (H - floor + s); rot = ease(Math.min(1, k / 0.7)) * TAU * 2 * d; sc = 0.6 + 0.4 * ease(io);
+    }
+    g.save(); g.translate(x, y); g.rotate(rot); g.scale(sc, sc); g.drawImage(img, -s / 2, -s / 2, s, s); g.restore();
+  }
   function frame(t) {
     const dt = Math.min(50, t - (lastT || t)) || 16; lastT = t;
     g.clearRect(0, 0, W, H);
     effects = effects.filter((e) => {
       e.age += dt; const k = e.age / e.dur; if (k >= 1) return false;
-      g.save(); try { e.draw(g, k, dt, e.age); } catch (err) { g.restore(); return false; } g.restore(); return true;
+      g.save(); try { e.draw(g, k, dt, e.age); if (e.rider && !OWN_RIDER[e.name]) drawCameo(g, e, k); } catch (err) { g.restore(); return false; } g.restore(); return true;
     });
     if (effects.length) raf = requestAnimationFrame(frame);
     else { raf = 0; lastT = 0; window.removeEventListener('resize', size); cv.remove(); cv = null; }
@@ -107,10 +128,21 @@
     },
     balloons(P, n) {
       const bs = Array.from({ length: Math.round(rnd(9, 13) * n) }, () => ({ x: rnd(0, W), y: H + rnd(40, 300), r: rnd(22, 38), v: rnd(0.38, 0.62), w: rnd(0, TAU), c: pick(P) }));
-      return { dur: 2400, draw(g, k, dt, age) {
+      // Three balloons tied together lift the mascot up through the middle of the screen.
+      const lift = { x: rnd(W * 0.3, W * 0.7), y: H + 60, v: 0.42, w: rnd(0, TAU) };
+      for (let i = 0; i < 3; i++) bs.push({ lift: true, dx: (i - 1) * 30, dy: Math.abs(i - 1) * 14, r: 30, c: P[i % P.length], w: lift.w + i });
+      return { dur: 2600, draw(g, k, dt, age) {
+        lift.y -= lift.v * dt;
+        const lx = lift.x + Math.sin(age * 0.003 + lift.w) * 16, rs = Math.min(W, H) * 0.24;
+        for (const b of bs) if (b.lift) { b.x = lx + b.dx; b.y = lift.y + b.dy; }
+        if (this.rider) {
+          g.strokeStyle = 'rgba(120,120,140,.85)'; g.lineWidth = 1.5;
+          for (const b of bs) if (b.lift) { g.beginPath(); g.moveTo(b.x, b.y + b.r * 1.2 + 4); g.lineTo(lx, lift.y + 100); g.stroke(); }
+          g.save(); g.translate(lx, lift.y + 100 + rs / 2); g.rotate(Math.sin(age * 0.004) * 0.12); g.drawImage(this.rider, -rs / 2, -rs / 2, rs, rs); g.restore();
+        }
         g.globalAlpha = k > 0.85 ? (1 - k) / 0.15 : 1;
         for (const b of bs) {
-          b.y -= b.v * dt; const x = b.x + Math.sin(age * 0.003 + b.w) * 12, y = b.y, ry = b.r * 1.2;
+          if (!b.lift) b.y -= b.v * dt; const x = b.lift ? b.x : b.x + Math.sin(age * 0.003 + b.w) * 12, y = b.y, ry = b.r * 1.2;
           g.strokeStyle = 'rgba(120,120,140,.75)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x, y + ry + 4);
           for (let s = 1; s <= 7; s++) g.lineTo(x + Math.sin(age * 0.006 + s + b.w) * 5, y + ry + 4 + s * 9); g.stroke();
           g.fillStyle = b.c; g.beginPath(); g.ellipse(x, y, b.r, ry, 0, 0, TAU); g.fill();
@@ -197,7 +229,8 @@
         for (const s of smoke) { s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt / 900; s.r += dt * 0.02; if (s.life > 0) { g.fillStyle = `rgba(240,240,250,${s.life * 0.55})`; g.beginPath(); g.arc(s.x, s.y, s.r, 0, TAU); g.fill(); } }
         for (const s of stars) { s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt / 1000; if (s.life > 0) { g.fillStyle = hexA(s.c, s.life); star(g, s.x, s.y, s.r, s.rot + age * 0.004); g.fill(); } }
         if (t >= 1) return;
-        g.translate(x, y); g.rotate(a); g.scale(sc, sc);
+        g.translate(x, y); g.rotate(a); g.scale(sc, sc * (Math.cos(a) < 0 ? -1 : 1));
+        if (this.rider) g.drawImage(this.rider, -20, -46, 40, 40);
         const fl = rnd(16, 30); g.fillStyle = '#ff8a1f'; g.beginPath(); g.moveTo(-26, -8); g.lineTo(-26 - fl, 0); g.lineTo(-26, 8); g.closePath(); g.fill();
         g.fillStyle = '#ffe066'; g.beginPath(); g.moveTo(-26, -4); g.lineTo(-26 - fl * 0.6, 0); g.lineTo(-26, 4); g.closePath(); g.fill();
         g.lineWidth = 2.5; g.strokeStyle = '#1a1033'; g.lineJoin = 'round';
@@ -324,7 +357,9 @@
           const u = (age - p.t0) / 1650; if (u <= 0 || u > 1.05) continue;
           const [x, y] = at(p, Math.min(1, u)), [x2, y2] = at(p, Math.min(1, u + 0.01)); p.trail.push([x, y]); if (p.trail.length > 34) p.trail.shift();
           g.setLineDash([6, 6]); g.strokeStyle = hexA(p.c, 0.8); g.lineWidth = 2.5; g.beginPath(); p.trail.forEach(([tx, ty], i) => (i ? g.lineTo(tx, ty) : g.moveTo(tx, ty))); g.stroke(); g.setLineDash([]);
-          g.save(); g.translate(x, y); g.rotate(Math.atan2(y2 - y, x2 - x)); g.scale(1.5, 1.5);
+          const pa = Math.atan2(y2 - y, x2 - x);
+          g.save(); g.translate(x, y); g.rotate(pa); g.scale(1.5, 1.5 * (Math.cos(pa) < 0 ? -1 : 1));
+          if (this.rider && p === ps[0]) g.drawImage(this.rider, -14, -30, 26, 26);
           g.fillStyle = '#ffffff'; g.strokeStyle = '#1a1033'; g.lineWidth = 1.6; g.lineJoin = 'round';
           g.beginPath(); g.moveTo(16, 0); g.lineTo(-11, -10); g.lineTo(-5, 0); g.lineTo(-11, 10); g.closePath(); g.fill(); g.stroke();
           g.strokeStyle = p.c; g.lineWidth = 2; g.beginPath(); g.moveTo(16, 0); g.lineTo(-5, 0); g.stroke(); g.restore();
@@ -364,6 +399,7 @@
     ensure();
     const n = opts.combo >= 5 ? 1.5 : opts.combo >= 3 ? 1.2 : 1;
     const e = FX[name](palette(), n); e.age = 0; e.name = name;
+    e.rider = opts.noRider ? null : rider; e.move = name === 'disco' ? 'dance' : pick(MOVES); e.dir = pick([1, -1]); e.px = rnd(0.2, 0.8);
     if (effects.length > 1) effects.shift(); // never stack more than two
     effects.push(e);
     if (!raf) raf = requestAnimationFrame(frame);
@@ -373,8 +409,8 @@
   // Big moments (every 5 in a row) get two effects at once.
   function play(opts = {}) {
     const a = playNamed(next(), opts);
-    if (opts.combo && opts.combo % 5 === 0) setTimeout(() => playNamed(next(), opts), 250);
+    if (opts.combo && opts.combo % 5 === 0) setTimeout(() => playNamed(next(), Object.assign({}, opts, { noRider: true })), 250);
     return a;
   }
-  window.MathQuestCelebrate = { play, playNamed, names: NAMES };
+  window.MathQuestCelebrate = { play, playNamed, setRider, names: NAMES };
 })();

@@ -12,7 +12,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const PER_SKILL = Number(process.env.PER_SKILL || 6);
 
 (async () => {
-  const exe = fs.readdirSync('/opt/pw-browsers').filter((d) => d.startsWith('chromium-')).map((d) => path.join('/opt/pw-browsers', d, 'chrome-linux/chrome')).find((p) => fs.existsSync(p));
+  const exe = fs.readdirSync('/opt/pw-browsers').filter((d) => d.startsWith('chromium-')).map((d) => [path.join('/opt/pw-browsers', d, 'chrome-linux/chrome'), path.join('/opt/pw-browsers', d, 'chrome-linux64/chrome')]).flat().find((p) => fs.existsSync(p));
   const browser = await chromium.launch({ executablePath: exe });
   const scheme = process.env.SCHEME || 'light';
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, colorScheme: scheme, deviceScaleFactor: 2 });

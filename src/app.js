@@ -305,6 +305,8 @@
       h('aside', { class: 'home-side stack', style: { gap: '16px' } }, questsCard(p), Cloud.enabled ? friendsCard(p) : null, freezeCard(p), leagueCard(p)));
     shell(content, { profile: p, track: tr.id });
     if (!greeted[p.id]) { greeted[p.id] = true; V.line('hello', { name: p.name }, { delay: 400 }); }
+    voiceFor(p);
+    { const t = setInterval(() => { const el = document.querySelector('.pip-btn'); if (el) moveMascot(el); }, 4200); const prev = cleanup; cleanup = () => { clearInterval(t); if (prev) prev(); }; }
     const news = mascotNews(p);
     const unlocks = news.filter((n) => n[0] === 'unlock').map((n) => n[1]), evolved = news.find((n) => n[0] === 'evolve');
     const onHome = () => state.view === 'home' && state.pid === p.id;
@@ -389,6 +391,7 @@
     const streakBefore = streakDays(p.id);
     const L = { correct: 0, wrong: 0, asked: 0, combo: 0, bestCombo: 0, xp: 0, started: Date.now(), hintsLeft: hintLimit(), hintsUsed: 0 };
     const recent = [];
+    let qMascot = null, idleTimer = 0;
     let problem = null, widget = null, shownAt = 0, phase = 'answer', missStreak = 0;
 
     const bar = h('i', { style: { width: '0%' } });
@@ -402,6 +405,7 @@
     const screen = h('div', { class: 'lesson', 'data-track': tr.id }, top, h('div', { class: 'lesson-body' }, card), foot);
     app.replaceChildren(screen);
     A.set(tierOf(p.id), 'lesson');
+    if (C.setRider) C.setRider(riderFor(p)); voiceFor(p);
 
     const onKey = (e) => {
       if (e.key !== 'Enter' || (e.target.tagName === 'BUTTON' && !e.target.hasAttribute('data-primary'))) return;
@@ -409,7 +413,8 @@
       if (primary && !primary.disabled) { e.preventDefault(); primary.click(); }
     };
     document.addEventListener('keydown', onKey);
-    cleanup = () => document.removeEventListener('keydown', onKey);
+    idleTimer = setInterval(() => { if (phase === 'answer' && qMascot && !qMascot.classList.contains('talking') && Math.random() < 0.5) moveMascot(qMascot, ['wiggle', 'wave', 'jump'][Math.floor(Math.random() * 3)]); }, 6000);
+    cleanup = () => { document.removeEventListener('keydown', onKey); clearInterval(idleTimer); };
 
     function paintTop() {
       bar.style.width = (L.correct / G.LESSON_LEN) * 100 + '%';
@@ -436,7 +441,7 @@
       const hintBox = h('div');
       const tag = level === 3 ? 'Challenge' : level === 2 ? 'Level 2' : 'Level 1';
       // The mascot reads the question aloud; tap it to hear it again (with the answer choices).
-      const readBtn = h('button', { class: 'q-mascot', 'aria-label': 'Hear the question', title: 'Tap to hear the question', onclick: () => readQuestion(pr, readBtn, true) },
+      const readBtn = qMascot = h('button', { class: 'q-mascot', 'aria-label': 'Hear the question', title: 'Tap to hear the question', onclick: () => readQuestion(pr, readBtn, true) },
         pip(p, 'think', 56), V.supported ? h('span', { class: 'q-speaker', 'aria-hidden': 'true' }, '🔊') : null);
       if (db.readAloud !== false && V.enabled) setTimeout(() => { if (problem === pr && phase === 'answer') readQuestion(pr, readBtn, false); }, 450);
       card.replaceChildren(
@@ -502,6 +507,7 @@
       if (ok) {
         G.sfx.correct(L.combo); G.buzz(12);
         C.play({ combo: L.combo });
+        reactMascot(qMascot, p, 'cheer', 56, ['jump', 'flip', 'spin', 'dance'][Math.floor(Math.random() * 4)]);
         if (!comboHit && !({ 2: 1, 3: 1, 4: 1 })[L.combo]) V.line('correct', null, { delay: 180 });
         G.floatText(top.querySelector('.lbar'), '+' + gained + ' XP', 'xp');
         const CALL = { 2: ['DOUBLE!', '#2f9bff'], 3: ['TRIPLE!', '#b05cff'], 4: ['ON FIRE!', '#ff8a1f'] };
@@ -509,6 +515,7 @@
         else if (CALL[L.combo]) setTimeout(() => { G.sfx.callout(); R.callout(CALL[L.combo][0], CALL[L.combo][1]); R.shakeScreen(); V.line('combo', { key: L.combo }, { priority: 2, pitch: 1.3, rate: 1.12 }); }, 150);
       } else {
         G.sfx.wrong(); G.buzz([30, 50, 30]); G.restartAnim(card, 'shake');
+        reactMascot(qMascot, p, 'sad', 56, 'shake');
         V.line('wrong', null, { delay: 250, pitch: 1.12, rate: 1 });
       }
       const cont = h('button', { class: 'btn3d wide ' + (ok ? 'good' : 'bad'), 'data-primary': true, onclick: () => { G.sfx.tap(); nextProblem(); } }, 'Continue');
@@ -571,7 +578,7 @@
       if (done) extras.append(h('div', { class: 'res-badge drop-earned' }, R.dropBox(2, 30), 'Reward drop earned!'));
       const cont = h('button', { class: 'btn3d wide', 'data-primary': true, onclick: () => (extended ? streakScreen() : go('home', { pid: p.id, track: tr.id })) }, 'Continue');
       card.replaceChildren(h('div', { class: 'results' },
-        h('div', { class: 'res-mascot' }, h('div', { class: 'res-rays' }, R.rays('#ffc928', 340)), pip(p, 'cheer', 140)),
+        h('div', { class: 'res-mascot' }, h('div', { class: 'res-rays' }, R.rays('#ffc928', 340)), (() => { const m = pip(p, 'cheer', 140); m.classList.add('move-party'); return m; })()),
         h('h1', { class: 'victory' + (done ? '' : ' soft') }, title),
         h('div', { class: 'res-tiles' }, tile('xp', 'Total XP', xpEl), tile('acc', acc >= 90 ? 'Amazing' : acc >= 70 ? 'Good' : 'Accuracy', accEl), tile('time', 'Time', timeEl)),
         extras));
@@ -636,6 +643,30 @@
     return { color: (s && s.color) || null, hat: i.hat && i.hat !== 'none' ? i.hat : null };
   }
   const pip = (p, state, size, override) => { const l = look(p); const o = override || {}; return M.draw(o.id || mascotOf(p).id, state, size, 'color' in o ? o.color : l.color, 'hat' in o ? o.hat : l.hat, o.stage != null ? o.stage : stageOf(p)); };
+  // ---------- Mascots in motion ----------
+  const MOVES = ['jump', 'flip', 'spin', 'wiggle', 'wave', 'dance'];
+  function moveMascot(el, move) {
+    const svgEl = el && (el.tagName === 'svg' ? el : el.querySelector('svg.mascot'));
+    if (!svgEl) return;
+    svgEl.classList.remove(...MOVES.map((m) => 'move-' + m), 'move-shake');
+    void svgEl.getBoundingClientRect();
+    svgEl.classList.add('move-' + (move || MOVES[Math.floor(Math.random() * MOVES.length)]));
+  }
+  // Swap the mascot inside a container to a new expression (and optionally a move).
+  function reactMascot(box, p, state, size, move) {
+    const old = box && box.querySelector('svg.mascot'); if (!old) return;
+    const fresh = pip(p, state, size); old.replaceWith(fresh); if (move) moveMascot(fresh, move);
+  }
+  // The mascot as an image, so the celebration canvas can draw it riding rockets and balloons.
+  function riderFor(p) {
+    try {
+      const el = pip(p, 'cheer', 200); el.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(el));
+      return img;
+    } catch (e) { return null; }
+  }
+  // Each grade's mascots get their own voice flavour: younger and brighter for Grade 3, cooler for Geometry.
+  function voiceFor(p) { const t = mascotOf(p).tier; V.setPersona && V.setPersona(t === 'g3' ? { pitch: 0.1, rate: 0.03 } : t === 'g7' ? { pitch: 0.02, rate: 0.05 } : { pitch: -0.06, rate: 0.02 }); }
   // Tell the kid when a new mascot unlocks or their mascot evolves.
   function mascotNews(p) {
     const i = invOf(p.id); const news = [];
