@@ -9,13 +9,14 @@ Math practice for one family: a 3rd grader, a 7th grader and a Geometry student.
 | Track | Skills | Math Lab tools |
 |---|---|---|
 | Grade 3 | Multiplication & division facts, fractions on a number line, area & perimeter, place value & rounding, telling time | Array Builder, Fraction Strips |
-| Grade 7 | Integers & rational numbers, proportional relationships, percent problems, two-step equations & inequalities, circles | Balance Scale, Integer Chips, Double Number Line, Circle Unroller |
+| Grade 7 | Integers & rational numbers, proportional relationships, percent problems, percent change (6 strategy skills: find the new amount, multipliers, find the percent, find the original, two changes in a row, markups/sales/tax/tips/commission/interest), two-step equations & inequalities, circles | Balance Scale, Integer Chips, Double Number Line, Circle Unroller |
 | Geometry | Angle relationships, triangle congruence & proofs, Pythagorean theorem & special right triangles, transformations, coordinate geometry | Triangle Explorer, Transformation Studio |
 
 ## How it plays
 
 - **Skill path:** each track is a winding path of skill nodes with crowns (levels 1–3) and Math Lab chests along the way.
 - **Lessons:** 10 correct answers finish a lesson. Missed questions show the worked solution, then the lesson keeps going.
+- **Learn with an example:** under every question, a fully worked example of the same kind (with the skill's strategy tip). "Show another example" makes a new one; kids can fold it away.
 - **Read-aloud:** the mascot reads each question out loud with math spoken naturally ("3 fourths", "x squared", "angle A B C", "M at negative 3 comma 2"). Tap the mascot to hear it again with the answer choices. Parents can turn auto-reading off.
 - **Hints:** 3 per lesson by default (parents can choose 0, 1, 2, 3, 5 or unlimited). The Hint button shows how many are left, and each hint flashes a big "2 HINTS LEFT" banner.
 - **XP & combos:** +5 XP per correct answer, +5 bonus every 5 in a row, +20 for finishing, +15 for a perfect lesson.

@@ -37,6 +37,7 @@ const PER_SKILL = Number(process.env.PER_SKILL || 6);
     const nSkills = await page.$$eval('.node', (els) => els.length);
     for (let si = 0; si < nSkills; si++) {
       for (let les = 0; les < LESSONS; les++) {
+        await page.waitForTimeout(700);
         if (await page.$('.levelup-scrim')) { await page.waitForTimeout(900); await shot(`levelup-${track}-${si}`, false); await page.click('.levelup-scrim button', { force: true }); }
         await page.locator('.node').nth(si).click();
         if (si === 0 && les === 0) await shot(`03b-pop-${track}`);

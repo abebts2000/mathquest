@@ -217,7 +217,7 @@
   function viewParentPin() { shell(pinPad('Parent view', 'Enter the parent PIN', db.parentPin, () => go('parent'), () => go('profiles'))); }
 
   // ---------- Home: skill path ----------
-  const ICONS = { 'g3-mult-div': '×', 'g3-frac-line': '½', 'g3-area-perim': '▦', 'g3-place-round': '≈', 'g3-time': '◷', 'g7-integers': '±', 'g7-proportions': '∝', 'g7-percent': '%', 'g7-equations': '𝑥', 'g7-circles': 'π', 'geo-angles': '∠', 'geo-congruence': '≅', 'geo-right-tri': '◺', 'geo-transform': '↻', 'geo-coord': '⊹' };
+  const ICONS = { 'g7-pc-new': '↗', 'g7-pc-mult': '×%', 'g7-pc-find': '?%', 'g7-pc-original': '↩', 'g7-pc-twostep': '⇅', 'g7-pc-real': '🏷', 'g3-mult-div': '×', 'g3-frac-line': '½', 'g3-area-perim': '▦', 'g3-place-round': '≈', 'g3-time': '◷', 'g7-integers': '±', 'g7-proportions': '∝', 'g7-percent': '%', 'g7-equations': '𝑥', 'g7-circles': 'π', 'geo-angles': '∠', 'geo-congruence': '≅', 'geo-right-tri': '◺', 'geo-transform': '↻', 'geo-coord': '⊹' };
   const iconFor = (s) => ICONS[s.id] || (s.strand || '★').charAt(0);
   const PATH_X = [0, 54, 78, 54, 0, -54, -78, -54];
   function nextSkill(p, tr) {
@@ -448,7 +448,7 @@
         h('div', { class: 'q-head' }, readBtn, h('div', { class: 'q-tag' }, h('span', { class: 'chip' }, tag), h('span', { class: 'muted' }, sk.title))),
         tex(h('div', { class: 'prompt', html: pr.prompt })),
         pr.figure ? tex(h('div', { class: 'figure', html: pr.figure })) : '',
-        h('div', { class: 'answer-area' }, widget.el), hintBox);
+        h('div', { class: 'answer-area' }, widget.el), hintBox, examplePanel(level));
       G.restartAnim(card, 'slide-in');
       foot.className = 'lesson-foot';
       foot.replaceChildren(h('div', { class: 'foot-in' },
@@ -458,6 +458,27 @@
       setTimeout(() => widget.focus && widget.focus(), 60);
     }
     // Hint button with the number left this lesson; shows a "hints left" note after each use.
+    // "Learn with an example": a fully worked problem of the same kind, at the bottom of the screen.
+    function examplePanel(level) {
+      const body = h('div', { class: 'ex-body' });
+      const draw = () => {
+        let ex = null;
+        for (let i = 0; i < 6 && !ex; i++) { try { const e = sk.generate(MQ.makeRng((Math.random() * 2 ** 31) | 0), level); if (e && e.prompt !== (problem && problem.prompt)) ex = e; } catch (err) { /* try again */ } }
+        if (!ex) { body.replaceChildren(h('p', { class: 'muted' }, 'No example right now.')); return; }
+        body.replaceChildren(...[
+          sk.tip ? h('p', { class: 'ex-tip' }, sk.tip) : null,
+          tex(h('div', { class: 'ex-q', html: '<b>Example:</b> ' + ex.prompt })),
+          ex.figure ? tex(h('div', { class: 'figure ex-fig', html: ex.figure })) : null,
+          tex(h('ol', { class: 'ex-steps' }, ...ex.explanation.map((st) => h('li', { html: st })))),
+          tex(h('div', { class: 'ex-ans', html: '<b>Answer:</b> ' + answerText(ex) })),
+          h('button', { class: 'btn-small', type: 'button', onclick: () => { G.sfx.tap(); draw(); } }, 'Show another example')
+        ].filter(Boolean));
+      };
+      const det = h('details', { class: 'example-panel', open: db.exampleOpen !== false, ontoggle: () => { db.exampleOpen = det.open; save(); if (det.open && !body.firstChild) draw(); } },
+        h('summary', {}, '📘 Learn with an example'), body);
+      if (det.open) draw();
+      return det;
+    }
     function readQuestion(pr, btn, withChoices) {
       if (db.muted || !V.supported) { if (withChoices) toast(db.muted ? 'Sound is off. Tap the speaker at the top to turn it on.' : 'This device can’t read aloud.'); return; }
       let text = V.speakMath(pr.prompt);

@@ -1472,12 +1472,219 @@
   };
 
   // ======================================================================
+  // ---------- Percent increase & decrease (7.RP.A.3) ----------
+  // Six skills, one per strategy. Every skill mixes increases and decreases.
+  const PC_ITEMS = ['bike', 'pair of jeans', 'skateboard', 'phone case', 'board game', 'jacket', 'video game', 'scooter', 'soccer ball', 'headset', 'backpack', 'pair of sneakers'];
+  const PC_COUNTS = [['students in a school club', 'members'], ['followers on a class blog', 'followers'], ['books in a classroom library', 'books'], ['fans at a home game', 'fans'], ['trees in a park', 'trees'], ['players in an online league', 'players']];
+  const pctPick = (whole, list) => list.filter((p) => (whole * p) % 100 === 0);
+  const multOf = (p, up) => (100 + (up ? p : -p)) / 100;
+  const word = (up) => (up ? 'increase' : 'decrease');
+  // Bar model: the original is 100%; the new bar is longer (increase) or shorter (decrease).
+  function pctBar(p, up) {
+    const base = 170, nw = Math.round((base * (100 + (up ? p : -p))) / 100), x0 = 66, Wd = x0 + Math.max(base, nw) + 16;
+    const box = (x, y, w, fill, dash) => `<rect x="${x}" y="${y}" width="${w}" height="28" rx="6" fill="${fill}" stroke="var(--ink)" stroke-width="2"${dash ? ' stroke-dasharray="5 4"' : ''}/>`;
+    const txt = (x, y, t, a = 'middle', col = 'var(--ink)') => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="13" font-weight="700" fill="${col}" font-family="inherit">${t}</text>`;
+    let s = `<svg viewBox="0 0 ${Wd} 104">` + txt(8, 30, 'Before', 'start') + box(x0, 10, base, 'var(--surface-2)') + txt(x0 + base / 2, 29, '100%');
+    s += txt(8, 80, 'After', 'start');
+    if (up) s += box(x0, 60, base, 'var(--surface-2)') + txt(x0 + base / 2, 79, '100%') + box(x0 + base, 60, nw - base, 'var(--accent-2)') + txt(x0 + base + (nw - base) / 2, 79, `+${p}%`, 'middle', 'var(--surface)');
+    else s += box(x0, 60, nw, 'var(--surface-2)') + txt(x0 + nw / 2, 79, `${100 - p}%`) + box(x0 + nw, 60, base - nw, 'none', true) + txt(x0 + nw + (base - nw) / 2, 79, `−${p}%`, 'middle', 'var(--bad)');
+    return s + '</svg>';
+  }
+
+  // 1) Find the new amount: find the change, then add it (increase) or subtract it (decrease).
+  function genPcNew(rng, level) {
+    const up = rng.bool(), item = rng.pick(PC_ITEMS);
+    if (level === 1 && rng.bool(0.4)) {
+      const [what, unit] = rng.pick(PC_COUNTS), p = rng.pick([10, 20, 25, 50, 5, 15]), O = 20 * rng.int(3, 30), ch = (O * p) / 100, N = up ? O + ch : O - ch;
+      return { prompt: `There were $${nl(O)}$ ${what}. The number ${up ? 'increased' : 'decreased'} by $${p}\\%$. How many ${unit} are there now?`, figure: pctBar(p, up), input: { type: 'number', unit }, answer: N,
+        explanation: [`Find the change: $${p}\\%$ of $${nl(O)}$ is $${nl(p / 100)} \\times ${nl(O)} = ${nl(ch)}$.`, `${up ? 'Add' : 'Subtract'}: $${nl(O)} ${up ? '+' : '-'} ${nl(ch)} = ${nl(N)}$ ${unit}.`] };
+    }
+    const ps = level === 1 ? [10, 20, 25, 50, 5, 30, 40] : level === 2 ? [12, 15, 35, 8, 45, 18, 65, 6] : [7.5, 12.5, 2.5, 17, 33, 4, 9];
+    const $P = (x) => (level === 3 ? M2(x) : M(x));
+    const P = level === 3 ? rng.int(1500, 15000) / 100 : level === 2 ? 4 * rng.int(5, 50) : 20 * rng.int(2, 15);
+    const p = rng.pick(ps), ch = (P * p) / 100, N = P + (up ? ch : -ch);
+    const prompt = up ? rng.pick([`A ${item} cost ${$P(P)}. The price went up by $${nl(p)}\\%$. What is the new price?`, `The store raised the price of a ${item} from ${$P(P)} by $${nl(p)}\\%$. What does it cost now?`])
+      : rng.pick([`A ${item} cost ${$P(P)}. The price went down by $${nl(p)}\\%$. What is the new price?`, `A ${item} that cost ${$P(P)} is marked down $${nl(p)}\\%$. What is the sale price?`]);
+    return { prompt: prompt + (level === 3 ? ' Round to the nearest cent.' : ''), figure: level === 1 ? pctBar(p, up) : undefined, input: { type: 'number', unit: 'dollars' }, answer: U.round(N, 2), check: moneyCheck(N),
+      explanation: [`Find the change: $${nl(p)}\\%$ of $${nl(P)}$ is $${nl(p / 100)} \\times ${nl(P)} = ${nl(U.round(ch, 4))}$.`, `${up ? 'Add' : 'Subtract'} it: $${nl(P)} ${up ? '+' : '-'} ${nl(U.round(ch, 4))} = ${nl(U.round(N, 4))}$${level === 3 ? `, about ${M2(U.round(N, 2))}` : ''}.`, `Shortcut: multiply by $${nl(multOf(p, up))}$, because the new price is $${nl(100 + (up ? p : -p))}\\%$ of the old one.`] };
+  }
+
+  // 2) Multipliers: a p% increase is ×(1 + p%), a p% decrease is ×(1 − p%).
+  function genPcMult(rng, level) {
+    const up = rng.bool(), v = rng.pick(['x', 'p', 'c', 'm', 'n']);
+    if (level === 1) {
+      const p = rng.pick([3, 5, 8, 10, 12, 15, 20, 25, 30, 35, 40, 45, 60, 75]), right = `$${nl(multOf(p, up))}${v}$`;
+      const c = choice(right, [`$${nl(multOf(p, !up))}${v}$`, `$${nl(p / 100)}${v}$`, `$${v} ${up ? '+' : '-'} ${p}$`, `$${nl(p)}${v}$`], rng);
+      return { prompt: `An amount $${v}$ ${up ? 'increases' : 'decreases'} by $${p}\\%$. Which expression gives the new amount?`, input: { type: 'choice', options: c.options }, answer: c.answer,
+        explanation: [`The new amount is $100\\% ${up ? '+' : '-'} ${p}\\% = ${100 + (up ? p : -p)}\\%$ of the original.`, `As a decimal that is $${nl(multOf(p, up))}$, so the new amount is ${right}.`] };
+    }
+    if (level === 2) {
+      const p = rng.pick([4, 6, 8, 12, 15, 18, 22, 25, 35, 45, 65, 2, 90]), m = multOf(p, up);
+      if (rng.bool(0.4)) {
+        const c = choice(`A $${p}\\%$ ${word(up)}`, [`A $${p}\\%$ ${word(!up)}`, `A $${nl(m * 100)}\\%$ ${word(up)}`, `A $${nl(m)}\\%$ ${word(up)}`], rng);
+        return { prompt: `${rng.pick(['A price', 'A town’s population', 'A team’s score', 'The number of app users', 'A plant’s height'])} is multiplied by $${nl(m)}$. What change is that?`, input: { type: 'choice', options: c.options }, answer: c.answer,
+          explanation: [`$${nl(m)} = ${nl(m * 100)}\\%$ of the original.`, `${m > 1 ? 'More' : 'Less'} than $100\\%$ means ${m > 1 ? 'an increase' : 'a decrease'} of $${p}\\%$.`] };
+      }
+      return { prompt: `To find the new ${rng.pick(['price', 'population', 'score', 'distance', 'salary', 'bill'])}, you multiply the old one by $${nl(m)}$. What percent ${word(up)} is that?`, input: { type: 'number', unit: '%' }, answer: p,
+        explanation: [`$${nl(m)} = ${nl(m * 100)}\\%$ of the old price.`, `$${nl(m * 100)}\\%$ is $${p}\\%$ ${up ? 'more' : 'less'} than $100\\%$, so it is a $${p}\\%$ ${word(up)}.`] };
+    }
+    const p = rng.pick([6, 8, 12, 15, 18, 24, 35, 40, 5, 7]), m = multOf(p, up), A = rng.pick([40, 60, 80, 120, 150, 200, 250, 75, 320, 500]);
+    if (rng.bool(0.5)) {
+      const N = U.round(A * m, 4);
+      return { prompt: `Use one multiplication to find the new amount after a $${p}\\%$ ${word(up)} of $${A}$.`, input: { type: 'number' }, answer: N,
+        explanation: [`Multiplier for a $${p}\\%$ ${word(up)}: $1 ${up ? '+' : '-'} ${nl(p / 100)} = ${nl(m)}$.`, `One step: $${nl(m)} \\times ${A} = ${nl(N)}$.`] };
+    }
+    const c = choice(`$${nl(m)}${v}$`, [`$${v} ${up ? '+' : '-'} ${nl(p / 100)}$`, `$${nl(p / 100)}${v}$`, `$${nl(multOf(p, !up))}${v}$`], rng);
+    return { prompt: `Which single term is equal to $${v} ${up ? '+' : '-'} ${nl(p / 100)}${v}$?`, input: { type: 'choice', options: c.options }, answer: c.answer,
+      explanation: [`Factor out $${v}$: $${v} ${up ? '+' : '-'} ${nl(p / 100)}${v} = ${v}(1 ${up ? '+' : '-'} ${nl(p / 100)})$.`, `$1 ${up ? '+' : '-'} ${nl(p / 100)} = ${nl(m)}$, so it equals $${nl(m)}${v}$: a $${p}\\%$ ${word(up)}.`] };
+  }
+
+  // 3) Find the percent of change: change ÷ original. (Also percent error.)
+  function genPcFind(rng, level) {
+    const up = rng.bool(), item = rng.pick(PC_ITEMS), who = U.name(rng);
+    if (level === 1) {
+      const O = rng.pick([20, 50, 100, 200, 25, 40, 10]), p = rng.pick(pctPick(O, [10, 20, 25, 50, 30, 40, 5, 60])), ch = (O * p) / 100, N = up ? O + ch : O - ch;
+      if (rng.bool(0.35)) {
+        const c = choice(`A $${p}\\%$ ${word(up)}`, [`A $${p}\\%$ ${word(!up)}`, `A $${ch}\\%$ ${word(up)}`, `A $${nl((ch / N) * 100 === p ? p + 5 : U.round((ch / N) * 100, 1))}\\%$ ${word(up)}`], rng, [`A $${p + 10}\\%$ ${word(up)}`]);
+        return { prompt: `${who}'s score went from $${O}$ to $${N}$. Which describes the change?`, input: { type: 'choice', options: c.options }, answer: c.answer,
+          explanation: [`The score got ${up ? 'bigger' : 'smaller'}, so it is ${up ? 'an increase' : 'a decrease'}.`, `Change: $${ch}$. Divide by the original: $\\frac{${ch}}{${O}} = ${nl(p / 100)} = ${p}\\%$.`] };
+      }
+      return { prompt: `A price changed from ${M(O)} to ${M(N)}. What is the percent ${word(up)}?`, figure: pctBar(p, up), input: { type: 'number', unit: '%' }, answer: p,
+        explanation: [`Change: $${up ? N + ' - ' + O : O + ' - ' + N} = ${ch}$.`, `Percent change $= \\frac{\\text{change}}{\\text{original}} = \\frac{${ch}}{${O}} = ${p}\\%$.`] };
+    }
+    if (level === 2) {
+      const O = rng.pick([20, 25, 40, 50, 80, 120, 160, 200, 250, 400, 500, 60]);
+      const p = rng.pick(pctPick(O, up ? [5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 80, 100, 150] : [5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 80]));
+      const ch = (O * p) / 100, N = up ? O + ch : O - ch;
+      const ctx = rng.pick(up ? [`The number of kids in the chess club went from $${O}$ to $${N}$.`, `A channel had $${O}$ subscribers. Now it has $${N}$.`, `Last month ${who} read for $${O}$ minutes. This month ${who} read for $${N}$ minutes.`, `The price of a ${item} rose from ${M(O)} to ${M(N)}.`]
+        : [`The number of cars in the lot went from $${O}$ to $${N}$.`, `${who}'s screen time dropped from $${O}$ minutes to $${N}$ minutes a day.`, `A town's water use fell from $${O}$ to $${N}$ thousand gallons.`, `The price of a ${item} dropped from ${M(O)} to ${M(N)}.`]);
+      return { prompt: `${ctx} What is the percent ${word(up)}?`, input: { type: 'number', unit: '%' }, answer: p,
+        explanation: [`Amount of change: $${ch}$.`, `Percent change $= \\frac{${ch}}{${O}} = ${nl(p / 100)}$.`, `That is a $${p}\\%$ ${word(up)}. Always divide by the <b>original</b> amount, not the new one.`] };
+    }
+    const kind = rng.pick(['round', 'round', 'error', 'compare']);
+    if (kind === 'error') {
+      const actual = rng.pick([40, 50, 60, 75, 80, 120, 150, 200, 250, 45, 64]), off = rng.int(2, Math.max(3, Math.floor(actual / 5))) * (up ? 1 : -1), est = actual + off, pe = (Math.abs(off) / actual) * 100;
+      const ctx = rng.pick([`${who} guessed there were $${est}$ jelly beans in a jar. There were actually $${actual}$.`, `${who} estimated a hallway is $${est}$ feet long. It is really $${actual}$ feet.`, `A weather app predicted $${est}$ millimeters of rain. The actual amount was $${actual}$ millimeters.`]);
+      return { prompt: `${ctx} What is the percent error? Round to the nearest tenth of a percent.`, input: { type: 'number', unit: '%' }, answer: U.round(pe, 1), check: tenthCheck(pe),
+        explanation: [`Error $= |\\text{estimate} - \\text{actual}| = |${est} - ${actual}| = ${Math.abs(off)}$.`, `Percent error $= \\frac{${Math.abs(off)}}{${actual}} \\times 100 \\approx ${nl(U.round(pe, 4))}\\%$.`, `Rounded: $${nl(U.round(pe, 1))}\\%$. Percent error divides by the actual value.`] };
+    }
+    if (kind === 'compare') {
+      const mk = (dir) => { const O = rng.pick([20, 25, 40, 50, 80, 100, 200]); const p = rng.pick(pctPick(O, [10, 20, 25, 30, 40, 50, 60, 75])); return { O, p, N: O + (dir ? 1 : -1) * ((O * p) / 100) }; };
+      const A = mk(up); let B = mk(up), g = 0; while (B.p === A.p && g++ < 20) B = mk(up);
+      const [nA, nB] = rng.pick([['Team Red', 'Team Blue'], ['Store A', 'Store B'], ['Ava’s plant', 'Sam’s plant'], ['Leo’s savings', 'Nia’s savings']]);
+      const win = A.p > B.p ? nA : nB, c = choice(win, [win === nA ? nB : nA, 'They changed by the same percent'], rng);
+      return { prompt: `${nA} went from $${A.O}$ to $${A.N}$. ${nB} went from $${B.O}$ to $${B.N}$. Which had the greater <b>percent</b> ${word(up)}?`, input: { type: 'choice', options: c.options }, answer: c.answer,
+        explanation: [`${nA}: $\\frac{${Math.abs(A.N - A.O)}}{${A.O}} = ${A.p}\\%$.`, `${nB}: $\\frac{${Math.abs(B.N - B.O)}}{${B.O}} = ${B.p}\\%$.`, `${win} changed by the greater percent.`] };
+    }
+    const O = rng.int(30, 400), N = up ? O + rng.int(3, Math.floor(O * 0.8)) : O - rng.int(3, Math.floor(O * 0.7)), pc = (Math.abs(N - O) / O) * 100;
+    return { prompt: `A number changed from $${O}$ to $${N}$. What is the percent ${word(up)}? Round to the nearest tenth of a percent.`, input: { type: 'number', unit: '%' }, answer: U.round(pc, 1), check: tenthCheck(pc),
+      explanation: [`Change: $|${N} - ${O}| = ${Math.abs(N - O)}$.`, `$\\frac{${Math.abs(N - O)}}{${O}} \\approx ${nl(U.round(pc / 100, 5))}$.`, `That is about a $${nl(U.round(pc, 1))}\\%$ ${word(up)}.`] };
+  }
+
+  // 4) Work backward to the original: new = multiplier × original, so original = new ÷ multiplier.
+  function genPcOriginal(rng, level) {
+    const up = rng.bool(), item = rng.pick(PC_ITEMS);
+    const p = rng.pick(level === 1 ? [10, 20, 25, 50] : level === 2 ? [5, 15, 30, 40, 60, 75, 35] : [12, 8, 15, 6, 18, 45]);
+    if (!up && p >= 100) return genPcOriginal(rng, level);
+    const O = level === 3 ? 4 * rng.int(5, 60) : 20 * rng.int(2, 20), m = multOf(p, up), N = U.round(O * m, 4);
+    if (level === 1 && rng.bool(0.4)) {
+      const c = choice(`$${nl(m)}x = ${nl(N)}$`, [`$x ${up ? '+' : '-'} ${p} = ${nl(N)}$`, `$${nl(p / 100)}x = ${nl(N)}$`, `$${nl(multOf(p, !up))}x = ${nl(N)}$`], rng);
+      return { prompt: `After a $${p}\\%$ ${word(up)}, a price is ${M(N)}. Which equation finds the original price $x$?`, input: { type: 'choice', options: c.options }, answer: c.answer,
+        explanation: [`After a $${p}\\%$ ${word(up)} the new price is $${100 + (up ? p : -p)}\\%$ of the original.`, `So $${nl(m)}x = ${nl(N)}$.`] };
+    }
+    const ctx = up ? rng.pick([`After a $${p}\\%$ price increase, a ${item} costs ${M(N)}.`, `A concert ticket went up $${p}\\%$ and now costs ${M(N)}.`])
+      : rng.pick([`After $${p}\\%$ off, a ${item} costs ${M(N)}.`, `A ${item} is on sale for $${p}\\%$ off. The sale price is ${M(N)}.`]);
+    return { prompt: `${ctx} What was the original price?`, input: { type: 'number', unit: 'dollars' }, answer: O, check: moneyCheck(O),
+      explanation: [`The new price is $${100 + (up ? p : -p)}\\%$ of the original: $${nl(m)} \\times \\text{original} = ${nl(N)}$.`, `Divide: $${nl(N)} \\div ${nl(m)} = ${nl(O)}$.`, `Check: ${up ? 'raising' : 'lowering'} ${M(O)} by $${p}\\%$ gives ${M(N)}. Don't just ${up ? 'subtract' : 'add'} $${p}\\%$ of the new price!`] };
+  }
+
+  // 5) Two changes in a row: multiply the multipliers; changes don't just add up.
+  function genPcTwoStep(rng, level) {
+    const item = rng.pick(PC_ITEMS), up1 = rng.bool(), up2 = rng.bool();
+    if (level === 1) {
+      const a = rng.pick([10, 20, 25, 30, 40, 50]);
+      if (rng.bool(0.5)) {
+        const net = U.round((multOf(a, up1) * multOf(a, !up1) - 1) * 100, 4);
+        const c = choice('Less than the original', ['More than the original', 'The same as the original', 'It depends on the price'], rng);
+        return { prompt: `A price ${up1 ? 'goes up' : 'goes down'} $${a}\\%$, then ${up1 ? 'goes down' : 'goes up'} $${a}\\%$. How does the final price compare to the original?`, input: { type: 'choice', options: c.options }, answer: c.answer,
+          explanation: [`Try it with $100$: $100 \\to ${nl(100 * multOf(a, up1))} \\to ${nl(U.round(100 * multOf(a, up1) * multOf(a, !up1), 4))}$.`, `The second $${a}\\%$ is taken of a different amount, so they don't cancel.`, `Overall change: $${nl(net)}\\%$.`] };
+      }
+      const O = 100 * rng.int(1, 9), b = rng.pick([10, 20, 50]), N = U.round(O * multOf(a, up1) * multOf(b, up2), 4);
+      return { prompt: `A ${item} costs ${M(O)}. The price ${up1 ? 'goes up' : 'goes down'} $${a}\\%$. Then the new price ${up2 ? 'goes up' : 'goes down'} $${b}\\%$. What is the final price?`, input: { type: 'number', unit: 'dollars' }, answer: N, check: moneyCheck(N),
+        explanation: [`First: $${nl(multOf(a, up1))} \\times ${O} = ${nl(O * multOf(a, up1))}$.`, `Second, on the <b>new</b> price: $${nl(multOf(b, up2))} \\times ${nl(O * multOf(a, up1))} = ${nl(N)}$.`] };
+    }
+    const a = rng.pick([10, 20, 25, 50, 40, 15]), b = rng.pick([10, 20, 25, 50, 40, 30]), m = multOf(a, up1) * multOf(b, up2), net = U.round((m - 1) * 100, 6);
+    const desc = `${up1 ? 'goes up' : 'goes down'} $${a}\\%$, then ${up2 ? 'goes up' : 'goes down'} $${b}\\%$`;
+    if (level === 2) {
+      const O = 5 * rng.int(6, 60), N = U.round(O * m, 6);
+      return { prompt: `A ${item} costs ${M(O)}. Its price ${desc}. What is the final price? Round to the nearest cent.`, input: { type: 'number', unit: 'dollars' }, answer: U.round(N, 2), check: moneyCheck(N),
+        explanation: [`Multipliers: $${nl(multOf(a, up1))}$ and $${nl(multOf(b, up2))}$.`, `$${O} \\times ${nl(multOf(a, up1))} \\times ${nl(multOf(b, up2))} = ${nl(U.round(N, 4))}$.`, `Final price: about ${M2(U.round(N, 2))}.`] };
+    }
+    if (rng.bool(0.35)) {
+      const price = 5 * rng.int(4, 30), d = rng.pick([10, 15, 20, 25, 30, 40]), tx = rng.pick([5, 6, 7, 8, 6.25]), sale = (price * (100 - d)) / 100, tot = sale * (1 + tx / 100);
+      return { prompt: `A ${item} costs ${M(price)}. It is $${d}\\%$ off, then $${nl(tx)}\\%$ sales tax is added to the sale price. What is the final cost? Round to the nearest cent.`, input: { type: 'number', unit: 'dollars' }, answer: U.round(tot, 2), check: moneyCheck(tot),
+        explanation: [`Decrease first: $${nl((100 - d) / 100)} \\times ${price} = ${nl(sale)}$.`, `Then the tax increase: $${nl(1 + tx / 100)} \\times ${nl(sale)} \\approx ${nl(U.round(tot, 4))}$.`, `Final cost: about ${M2(U.round(tot, 2))}.`] };
+    }
+    return { prompt: `A price ${desc}. What is the overall percent change? Use a negative number for a decrease.`, input: { type: 'number', unit: '%' }, answer: net,
+      explanation: [`Multiply the multipliers: $${nl(multOf(a, up1))} \\times ${nl(multOf(b, up2))} = ${nl(U.round(m, 6))}$.`, `That is $${nl(U.round(m * 100, 4))}\\%$ of the original.`, `Overall change: $${nl(U.round(m * 100, 4))}\\% - 100\\% = ${nl(net)}\\%$.`] };
+  }
+
+  // 6) Real-world increases and decreases: markup, discount, tax, tip, commission, interest.
+  function genPcReal(rng, level) {
+    const item = rng.pick(PC_ITEMS), who = U.name(rng);
+    if (level === 1) {
+      const t = rng.pick(['disc', 'markup', 'tax', 'disc', 'markup']);
+      const P = 4 * rng.int(3, 40), p = rng.pick(t === 'tax' ? [5, 10] : [10, 20, 25, 50, 30, 40]);
+      const ch = (P * p) / 100, up = t !== 'disc', N = up ? P + ch : P - ch;
+      const prompt = t === 'disc' ? `A ${item} costs ${M(P)}. It is on sale for $${p}\\%$ off. What is the sale price?`
+        : t === 'markup' ? `A store buys a ${item} for ${M(P)} and marks it up $${p}\\%$. What is the selling price?`
+          : `A ${item} costs ${M(P)}. The sales tax is $${p}\\%$. What is the total cost?`;
+      return { prompt, input: { type: 'number', unit: 'dollars' }, answer: N, check: moneyCheck(N),
+        explanation: [`A ${t === 'disc' ? 'discount is a decrease' : t === 'markup' ? 'markup is an increase' : 'sales tax is an increase'}.`, `$${p}\\%$ of $${P}$ is $${nl(ch)}$.`, `$${P} ${up ? '+' : '-'} ${nl(ch)} = ${nl(N)}$.`] };
+    }
+    if (level === 2) {
+      const t = rng.pick(['tip', 'tax', 'markupPct', 'discPct', 'markupPct', 'discPct']);
+      if (t === 'tip' || t === 'tax') {
+        const bill = rng.int(1200, 9000) / 100, p = t === 'tip' ? rng.pick([15, 18, 20, 25]) : rng.pick([5, 6, 6.25, 7, 8]), tot = bill * (1 + p / 100);
+        return { prompt: t === 'tip' ? `${who}'s family's dinner costs ${M2(bill)}. They leave a $${p}\\%$ tip. What is the total? Round to the nearest cent.` : `A ${item} costs ${M2(bill)} before a $${nl(p)}\\%$ sales tax. What is the total? Round to the nearest cent.`,
+          input: { type: 'number', unit: 'dollars' }, answer: U.round(tot, 2), check: moneyCheck(tot),
+          explanation: [`${t === 'tip' ? 'A tip' : 'Tax'} is a percent increase.`, `Multiply by $${nl(1 + p / 100)}$: $${nl(1 + p / 100)} \\times ${nl(bill)} \\approx ${nl(U.round(tot, 4))}$.`, `Total: about ${M2(U.round(tot, 2))}.`] };
+      }
+      const up = t === 'markupPct', O = rng.pick([20, 40, 50, 80, 120, 200, 60, 160]);
+      const p = rng.pick(pctPick(O, up ? [10, 20, 25, 30, 40, 50, 60, 75, 100] : [10, 15, 20, 25, 30, 40, 50, 60, 75])), N = (O * (100 + (up ? p : -p))) / 100;
+      return { prompt: up ? `A shop pays ${M(O)} for a ${item} and sells it for ${M(N)}. What is the percent markup?` : `A ${item} usually costs ${M(O)}. It is on sale for ${M(N)}. What is the percent discount?`,
+        input: { type: 'number', unit: '%' }, answer: p,
+        explanation: [`${up ? 'Markup' : 'Discount'}: $${(O * p) / 100}$ dollars.`, `Divide by the original price: $\\frac{${(O * p) / 100}}{${O}} = ${p}\\%$.`] };
+    }
+    const t = rng.pick(['interest', 'commission', 'markdownTwice', 'interest']);
+    if (t === 'interest') {
+      const P = 100 * rng.int(2, 30), r = rng.pick([2, 3, 4, 5, 6, 2.5, 1.5]), yrs = rng.int(2, 6), I = (P * r * yrs) / 100, tot = P + I, askTot = rng.bool(0.6);
+      return { prompt: `${who} puts ${M(P)} in a savings account that earns $${nl(r)}\\%$ simple interest each year. ${askTot ? `How much money is in the account after $${yrs}$ years?` : `How much interest does ${who} earn in $${yrs}$ years?`}`,
+        input: { type: 'number', unit: 'dollars' }, answer: askTot ? tot : I, check: moneyCheck(askTot ? tot : I),
+        explanation: [`Simple interest: $I = Prt = ${P} \\times ${nl(r / 100)} \\times ${yrs} = ${nl(I)}$.`].concat(askTot ? [`Balance (an increase): $${P} + ${nl(I)} = ${nl(tot)}$.`] : [`${who} earns ${M2(I)} in interest.`]) };
+    }
+    if (t === 'commission') {
+      const sales = 50 * rng.int(10, 200), r = rng.pick([2, 3, 4, 5, 6, 8, 10, 12]), base = 50 * rng.int(4, 20), com = (sales * r) / 100;
+      return { prompt: `${who} earns ${M(base)} a week plus a $${r}\\%$ commission on sales. This week ${who} sold ${M(sales)}. How much did ${who} earn in all?`, input: { type: 'number', unit: 'dollars' }, answer: base + com, check: moneyCheck(base + com),
+        explanation: [`Commission: $${nl(r / 100)} \\times ${nl(sales)} = ${nl(com)}$.`, `Total: $${nl(base)} + ${nl(com)} = ${nl(base + com)}$.`] };
+    }
+    const O = 20 * rng.int(3, 20), a = rng.pick([20, 25, 30, 40, 50]), b = rng.pick([10, 20, 25]), N = U.round(O * (1 - a / 100) * (1 - b / 100), 4), single = U.round(100 - (100 * N) / O, 4);
+    return { prompt: `A ${item} costs ${M(O)}. It is marked down $${a}\\%$, then the clearance price is marked down another $${b}\\%$. What single percent discount is that in all?`, input: { type: 'number', unit: '%' }, answer: single,
+      explanation: [`Final price: $${O} \\times ${nl(1 - a / 100)} \\times ${nl(1 - b / 100)} = ${nl(N)}$.`, `You pay $${nl(U.round((N / O) * 100, 4))}\\%$ of the price.`, `Single discount: $100\\% - ${nl(U.round((N / O) * 100, 4))}\\% = ${nl(single)}\\%$, not $${a + b}\\%$.`] };
+  }
+
   MQ.registerTrack({
     id: 'g7', title: 'Grade 7', subtitle: 'Integers, proportions, percents, equations & circles',
     skills: [
       { id: 'g7-integers', title: 'Integers & rational numbers', strand: 'Number System', ccss: '7.NS.A.1–3', blurb: 'Add, subtract, multiply and divide positive and negative numbers, fractions and decimals.', lab: 'g7-integer-chips', generate: genIntegers },
       { id: 'g7-proportions', title: 'Proportional relationships', strand: 'Ratios & Proportions', ccss: '7.RP.A.1–2', blurb: 'Find unit rates and the constant of proportionality from tables, equations and graphs.', lab: 'g7-double-line', generate: genProportions },
       { id: 'g7-percent', title: 'Percent problems', strand: 'Ratios & Proportions', ccss: '7.RP.A.3', blurb: 'Discounts, tax, tips, percent change, and simple interest.', lab: 'g7-double-line', generate: genPercent },
+      { id: 'g7-pc-new', title: 'Percent change: find the new amount', strand: 'Percent Change', ccss: '7.RP.A.3', blurb: 'Find the change, then add it for an increase or subtract it for a decrease.', tip: 'Strategy: change = percent × original. Increase → add the change. Decrease → subtract it.', lab: 'g7-double-line', generate: genPcNew },
+      { id: 'g7-pc-mult', title: 'Percent change: multipliers', strand: 'Percent Change', ccss: '7.RP.A.3', blurb: 'A 15% increase is × 1.15 and a 15% decrease is × 0.85 — one step does it all.', tip: 'Strategy: increase by p% → multiply by (1 + p%). Decrease by p% → multiply by (1 − p%).', lab: 'g7-double-line', generate: genPcMult },
+      { id: 'g7-pc-find', title: 'Percent change: find the percent', strand: 'Percent Change', ccss: '7.RP.A.3', blurb: 'Percent increase, decrease and percent error: divide the change by the original.', tip: 'Strategy: percent change = (new − original) ÷ original × 100. Percent error divides by the actual value.', lab: 'g7-double-line', generate: genPcFind },
+      { id: 'g7-pc-original', title: 'Percent change: find the original', strand: 'Percent Change', ccss: '7.RP.A.3', blurb: 'Work backward from the new amount by dividing by the multiplier.', tip: 'Strategy: new = multiplier × original, so original = new ÷ multiplier.', lab: 'g7-double-line', generate: genPcOriginal },
+      { id: 'g7-pc-twostep', title: 'Percent change: two changes in a row', strand: 'Percent Change', ccss: '7.RP.A.3', blurb: 'Up then down, down then down, discount then tax — multiply the multipliers.', tip: 'Strategy: do each change on the new amount, or multiply the two multipliers. Percents don’t just add up.', lab: 'g7-double-line', generate: genPcTwoStep },
+      { id: 'g7-pc-real', title: 'Percent change: markups, sales, tax & more', strand: 'Percent Change', ccss: '7.RP.A.3', blurb: 'Markups, discounts, sales tax, tips, commission and simple interest.', tip: 'Markup, tax, tip, commission and interest increase the amount. Discounts and markdowns decrease it.', lab: 'g7-double-line', generate: genPcReal },
       { id: 'g7-equations', title: 'Two-step equations & inequalities', strand: 'Expressions & Equations', ccss: '7.EE.B.4', blurb: 'Solve equations like 3x + 4 = 19 and inequalities, and write them from word problems.', lab: 'g7-balance', generate: genEquations },
       { id: 'g7-circles', title: 'Circumference & area of circles', strand: 'Geometry', ccss: '7.G.B.4', blurb: 'Use π to find the distance around and the area inside circles and shapes made from them.', lab: 'g7-circle-unroll', generate: genCircles }
     ],

@@ -668,3 +668,16 @@ body:has(.arena-bg) { background-image: none; }
 @keyframes m-wave { 0%, 100% { transform: rotate(0); } 20%, 60% { transform: rotate(-55deg); } 40%, 80% { transform: rotate(-25deg); } }
 /* Always-on life: a gentle breathing bob for every mascot that isn't already animating */
 .mascot.pip-happy .pip-body, .mascot.pip-cheer .pip-body { animation: pip-bob 1.4s ease-in-out infinite; transform-origin: 60px 100px; }
+
+/* Learn with an example (bottom of the question screen) */
+.example-panel { margin-top: 10px; border: 2px dashed var(--line); border-radius: 16px; background: color-mix(in srgb, var(--surface) 92%, transparent); padding: 10px 14px; }
+.example-panel > summary { cursor: pointer; font: 700 1rem/1.4 var(--font-display); color: var(--t, var(--accent)); list-style: none; }
+.example-panel > summary::-webkit-details-marker { display: none; }
+.example-panel > summary::after { content: " ▾"; color: var(--muted); }
+.example-panel:not([open]) > summary::after { content: " ▸"; }
+.ex-body { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; font-size: .97rem; }
+.ex-tip { font-weight: 700; background: color-mix(in srgb, var(--t, var(--accent)) 12%, var(--surface)); border-left: 4px solid var(--t, var(--accent)); padding: 8px 10px; border-radius: 0 10px 10px 0; }
+.ex-steps { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 6px; }
+.ex-ans { color: var(--good); font-weight: 700; }
+.ex-fig svg { max-width: 300px; }
+.example-panel .btn-small { align-self: flex-start; }
